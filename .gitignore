@@ -1,0 +1,33 @@
+# Existing reference material and archives are not part of this study history.
+/FOC_Test/
+/M创动工坊分享资料2.9-5/
+/*.zip
+**/*.zip
+
+# Keil build products.
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.bin
+*.elf
+*.map
+*.lnp
+*.sct
+*.dep
+*.iex
+*.lst
+*.build_log.htm
+**/MDK-ARM/*/*.htm
+
+# Keil/J-Link and editor runtime state.
+*.uvguix.*
+*.uvoptx
+*.log
+JLinkLog.txt
+JLinkSettings.ini
+codex_build.log
+keil-assistant.log
+uv4.log
+**/MDK-ARM/.vscode/
