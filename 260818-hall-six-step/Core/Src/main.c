@@ -163,7 +163,10 @@ volatile	uint32_t old_time = 0;
   MX_GPIO_Init();
   MX_TIM8_Init();
   MX_USART1_UART_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+HAL_TIM_Base_Start(&htim5);
+
 HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
 /*
@@ -189,7 +192,7 @@ HAL_Delay(300);
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		uint32_t time = HAL_GetTick();
+		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
 		
 		// HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
 		// HAL_Delay(1000);
@@ -211,13 +214,16 @@ HAL_Delay(300);
 				uint32_t timediff = time - old_time; 
 				if ((old_time != 0) && (timediff != 0))
 				{
-						speed = 60000U / (timediff * 24U);
+						speed += 60000000U / (timediff * 24U);
 				}
 				old_time = time;
-				printf("hall=%u, dt=%lu, rpm=%u\r\n",
-							 (unsigned int)i,
-							 (unsigned long)timediff,
-							 (unsigned int)speed);
+				if(i==1)
+				{
+					speed = speed/6;
+					printf("rpm=%u\r\n",(unsigned int)speed);
+					speed = 0;
+					
+				}
 		}
 		
 //		volatile uint16_t speed = 0;
