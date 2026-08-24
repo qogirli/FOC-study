@@ -48,6 +48,10 @@
 volatile uint8_t motor_step = 0xFF;
 volatile	uint32_t old_time = 0;
 volatile uint16_t speed = 0;
+volatile uint8_t printf_flag =0;
+volatile uint16_t speed_print =0;
+volatile uint16_t target_rpm = 200;
+volatile uint16_t pwm_value = 420;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,8 +59,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void Motor_SetStep(uint8_t step)
 {
-  uint32_t pwm_value = 420-1;
-  
+
   HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_1);
   HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_2);
   HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_3);
@@ -199,8 +202,55 @@ Motor_SetStep(motor_step);
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  static uint32_t control_time = 0;
+  static int32_t speed_integral = 0;
+
   while (1)
   {
+        uint32_t now = HAL_GetTick();
+
+        if ((uint32_t)(now - control_time) >= 30U)
+        {
+            int32_t speed_error;
+            int32_t pwm_output;
+
+            control_time = now;
+
+            speed_error = (int32_t)target_rpm - (int32_t)speed_print;
+
+            speed_integral += speed_error;
+
+            if (speed_integral < 0)
+            {
+                speed_integral = 0;
+            }
+            else if (speed_integral > 42000)
+            {
+                speed_integral = 42000;
+            }
+
+            /* PI控制：Kp = 1，Ki = 1/20 */
+            pwm_output = speed_error + speed_integral / 20;
+
+            if (pwm_output < 0)
+            {
+                pwm_output = 0;
+            }
+            else if (pwm_output > 840)
+            {
+                pwm_output = 840;
+            }
+
+            pwm_value = (uint16_t)pwm_output;
+        }
+
+		      if (printf_flag == 1)
+        {
+            printf_flag=0;
+            printf("rpm=%u pwm_value=%d\r\n", (unsigned int)speed_print,pwm_value);
+
+        }
+
 //		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
 //		
 //		// HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
@@ -296,8 +346,27 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM5)
     {
+        uint32_t time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+        if (time != 0)
+        {
+            speed += 60000000U / (time * 24U);
+        }
+
         motor_step = HALL_Read();
         Motor_SetStep(motor_step);
+
+        if (motor_step == 1)
+        {
+					printf_flag = 1;
+
+					speed_print = speed;
+					speed_print = speed_print / 6;
+					speed =0;
+//            speed = speed / 6;
+//            printf("rpm=%u\r\n", (unsigned int)speed);
+//            speed = 0;
+        }
     }
 }
 /* USER CODE END 4 */
