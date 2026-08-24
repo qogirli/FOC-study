@@ -45,7 +45,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t motor_step = 0xFF;
+volatile	uint32_t old_time = 0;
+volatile uint16_t speed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -53,7 +55,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void Motor_SetStep(uint8_t step)
 {
-  uint32_t pwm_value = 840;
+  uint32_t pwm_value = 420-1;
   
   HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_1);
   HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_2);
@@ -138,9 +140,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-volatile uint8_t motor_step = 0xFF;
-volatile	uint32_t old_time = 0;
-	volatile uint16_t speed = 0;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -165,7 +165,7 @@ volatile	uint32_t old_time = 0;
   MX_USART1_UART_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-HAL_TIM_Base_Start(&htim5);
+	HAL_TIMEx_HallSensor_Start_IT(&htim5);
 
 HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
@@ -178,53 +178,62 @@ __HAL_TIM_DISABLE_OCxPRELOAD(&htim8, TIM_CHANNEL_2);
 __HAL_TIM_DISABLE_OCxPRELOAD(&htim8, TIM_CHANNEL_3);
 
 /* 先配置第一拍：A+、B- */
-Motor_SetStep(1);
+
 
 /*
  * 第一次测试时先注释这一句，只观察六路逻辑波形。
  * 波形正确并接好限流电源后，再取消注释。
  */
 HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-HAL_Delay(300);
+HAL_Delay(10);  // 你当前缺的就是这个
+
+motor_step = HALL_Read();
+Motor_SetStep(motor_step);
+//HAL_Delay(100);
+
+//Motor_SetStep(2);
+//HAL_Delay(100);
+
+//Motor_SetStep(3);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
-		
-		// HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
-		// HAL_Delay(1000);
-//    Motor_SetStep(motor_step);
+//		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
+//		
+//		// HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
+//		// HAL_Delay(1000);
+////    Motor_SetStep(motor_step);
 
-//    motor_step++;
+////    motor_step++;
 
-//    if (motor_step > 6)
-//    {
-//        motor_step = 1;
-//    }
-		
-		volatile uint8_t i = HALL_Read();
+////    if (motor_step > 6)
+////    {
+////        motor_step = 1;
+////    }
+//		
+//		volatile uint8_t i = HALL_Read();
 
-		if (i != motor_step)
-		{
-				motor_step = i;
-				Motor_SetStep(i);
-				uint32_t timediff = time - old_time; 
-				if ((old_time != 0) && (timediff != 0))
-				{
-						speed += 60000000U / (timediff * 24U);
-				}
-				old_time = time;
-				if(i==1)
-				{
-					speed = speed/6;
-					printf("rpm=%u\r\n",(unsigned int)speed);
-					speed = 0;
-					
-				}
-		}
+//		if (i != motor_step)
+//		{
+//				motor_step = i;
+//				Motor_SetStep(i);
+//				uint32_t timediff = time - old_time; 
+//				if ((old_time != 0) && (timediff != 0))
+//				{
+//						speed += 60000000U / (timediff * 24U);
+//				}
+//				old_time = time;
+//				if(i==1)
+//				{
+//					speed = speed/6;
+//					printf("rpm=%u\r\n",(unsigned int)speed);
+//					speed = 0;
+//					
+//				}
+//		}
 		
 //		volatile uint16_t speed = 0;
 //		speed = 
@@ -283,7 +292,14 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM5)
+    {
+        motor_step = HALL_Read();
+        Motor_SetStep(motor_step);
+    }
+}
 /* USER CODE END 4 */
 
 /**
