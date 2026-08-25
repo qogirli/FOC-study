@@ -50,8 +50,9 @@ volatile	uint32_t old_time = 0;
 volatile uint16_t speed = 0;
 volatile uint8_t printf_flag =0;
 volatile uint16_t speed_print =0;
-volatile uint16_t target_rpm = 200;
+volatile uint16_t target_rpm = 600;
 volatile uint16_t pwm_value = 420;
+volatile uint8_t motor_run_flag = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -207,49 +208,98 @@ Motor_SetStep(motor_step);
 
   while (1)
   {
-        uint32_t now = HAL_GetTick();
+    static uint8_t Key1_Flag = 0;
+    uint32_t now = HAL_GetTick();
+    uint8_t key_state = HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin);
 
-        if ((uint32_t)(now - control_time) >= 30U)
-        {
-            int32_t speed_error;
-            int32_t pwm_output;
+    if (((uint32_t)(now - control_time) >= 30U) && (motor_run_flag == 1))
+    {
+      int32_t speed_error;
+      int32_t pwm_output;
 
-            control_time = now;
+      control_time = now;
+      speed_error = (int32_t)target_rpm - (int32_t)speed_print;
+      speed_integral += speed_error;
 
-            speed_error = (int32_t)target_rpm - (int32_t)speed_print;
+      if (speed_integral < 0)
+      {
+        speed_integral = 0;
+      }
+      else if (speed_integral > 42000)
+      {
+        speed_integral = 42000;
+      }
 
-            speed_integral += speed_error;
+      /* PI控制：Kp = 1，Ki = 1/20 */
+      pwm_output = speed_error + speed_integral / 20;
 
-            if (speed_integral < 0)
-            {
-                speed_integral = 0;
-            }
-            else if (speed_integral > 42000)
-            {
-                speed_integral = 42000;
-            }
+      if (pwm_output < 0)
+      {
+        pwm_output = 0;
+      }
+      else if (pwm_output > 840)
+      {
+        pwm_output = 840;
+      }
 
-            /* PI控制：Kp = 1，Ki = 1/20 */
-            pwm_output = speed_error + speed_integral / 20;
+      pwm_value = (uint16_t)pwm_output;
+    }
 
-            if (pwm_output < 0)
-            {
-                pwm_output = 0;
-            }
-            else if (pwm_output > 840)
-            {
-                pwm_output = 840;
-            }
+    if (printf_flag == 1)
+    {
+      printf_flag = 0;
+      printf("rpm=%u pwm_value=%d\r\n", (unsigned int)speed_print, pwm_value);
+    }
 
-            pwm_value = (uint16_t)pwm_output;
-        }
+    /* 第一次按下：停止电机 */
+    if ((Key1_Flag == 0) && (key_state == 0))
+    {
+      motor_run_flag = 0;
 
-		      if (printf_flag == 1)
-        {
-            printf_flag=0;
-            printf("rpm=%u pwm_value=%d\r\n", (unsigned int)speed_print,pwm_value);
+      HAL_TIMEx_HallSensor_Stop_IT(&htim5);
+      Motor_SetStep(0);
+      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
-        }
+      speed_integral = 0;
+      speed = 0;
+      speed_print = 0;
+      pwm_value = 0;
+      Key1_Flag = 1;
+    }
+    /* 第一次弹起 */
+    else if ((Key1_Flag == 1) && (key_state == 1))
+    {
+      Key1_Flag = 2;
+    }
+    /* 第二次按下：启动电机 */
+    else if ((Key1_Flag == 2) && (key_state == 0))
+    {
+      speed_integral = 0;
+      speed = 0;
+      speed_print = 0;
+
+      /* 给启动第一拍一个确定的占空比 */
+      pwm_value = 420;
+
+      /* 防止启动后立刻执行一次PI */
+      control_time = HAL_GetTick();
+
+      __HAL_TIM_CLEAR_FLAG(&htim5, TIM_FLAG_CC1);
+      HAL_TIMEx_HallSensor_Start_IT(&htim5);
+
+      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+      HAL_Delay(10);
+
+      motor_run_flag = 1;
+      motor_step = HALL_Read();
+      Motor_SetStep(motor_step);
+      Key1_Flag = 3;
+    }
+    /* 第二次弹起：回到初始状态 */
+    else if ((Key1_Flag == 3) && (key_state == 1))
+    {
+      Key1_Flag = 0;
+    }
 
 //		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
 //		
