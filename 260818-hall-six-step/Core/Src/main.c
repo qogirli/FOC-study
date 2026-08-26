@@ -129,6 +129,29 @@ static uint8_t HALL_Read(void)
 
     return hall_state;
 }
+
+static void Motor_Brake(void)
+{
+  /* 先关闭当前六步换相状态 */
+  Motor_SetStep(0);
+
+  /*
+   * PWM1模式下CCR=0：
+   * CH1/2/3保持低电平，上桥关闭；
+   * CH1N/2N/3N保持高电平，下桥导通。
+   */
+  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, 0);
+  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, 0);
+  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, 0);
+
+  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
+
+  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
+  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
+  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -257,6 +280,8 @@ Motor_SetStep(motor_step);
       motor_run_flag = 0;
 
       HAL_TIMEx_HallSensor_Stop_IT(&htim5);
+      Motor_Brake();
+      HAL_Delay(200);
       Motor_SetStep(0);
       HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
