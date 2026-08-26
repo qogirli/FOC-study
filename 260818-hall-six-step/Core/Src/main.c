@@ -50,7 +50,7 @@ volatile	uint32_t old_time = 0;
 volatile uint16_t speed = 0;
 volatile uint8_t printf_flag =0;
 volatile uint16_t speed_print =0;
-volatile uint16_t target_rpm = 600;
+volatile uint16_t target_rpm = 3500;
 volatile uint16_t pwm_value = 420;
 volatile uint8_t motor_run_flag = 1;
 /* USER CODE END PV */
@@ -232,8 +232,15 @@ Motor_SetStep(motor_step);
   while (1)
   {
     static uint8_t Key1_Flag = 0;
+    static uint8_t Key2_Flag = 0;
+    static uint8_t Key3_Flag = 0;
+    static uint8_t Key4_Flag = 0;
+    static uint8_t Key5_Flag = 0;
+
     uint32_t now = HAL_GetTick();
     uint8_t key_state = HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin);
+    uint8_t key2_state = HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin);
+    uint8_t key3_state = HAL_GPIO_ReadPin(KEY3_GPIO_Port, KEY3_Pin);
 
     if (((uint32_t)(now - control_time) >= 30U) && (motor_run_flag == 1))
     {
@@ -253,16 +260,16 @@ Motor_SetStep(motor_step);
         speed_integral = 42000;
       }
 
-      /* PI控制：Kp = 1，Ki = 1/20 */
-      pwm_output = speed_error + speed_integral / 20;
+      /* PI控制：Kp = 1，Ki = 1/10 */
+      pwm_output = speed_error + speed_integral / 10;
 
       if (pwm_output < 0)
       {
         pwm_output = 0;
       }
-      else if (pwm_output > 840)
+      else if (pwm_output > 4200)
       {
-        pwm_output = 840;
+        pwm_output = 4200;
       }
 
       pwm_value = (uint16_t)pwm_output;
@@ -271,7 +278,10 @@ Motor_SetStep(motor_step);
     if (printf_flag == 1)
     {
       printf_flag = 0;
-      printf("rpm=%u pwm_value=%d\r\n", (unsigned int)speed_print, pwm_value);
+      printf("target=%u rpm=%u pwm=%u\r\n",
+       target_rpm,
+       speed_print,
+       pwm_value);
     }
 
     /* 第一次按下：停止电机 */
@@ -281,7 +291,7 @@ Motor_SetStep(motor_step);
 
       HAL_TIMEx_HallSensor_Stop_IT(&htim5);
       Motor_Brake();
-      HAL_Delay(200);
+      HAL_Delay(20);
       Motor_SetStep(0);
       HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
@@ -325,6 +335,37 @@ Motor_SetStep(motor_step);
     {
       Key1_Flag = 0;
     }
+		
+		/* KEY2：目标转速增加100 RPM */
+		if ((Key2_Flag == 0) && (key2_state == 0))
+		{
+			if (target_rpm < 8000)
+			{
+				target_rpm += 100;
+			}
+
+			Key2_Flag = 1;
+		}
+		else if ((Key2_Flag == 1) && (key2_state == 1))
+		{
+			Key2_Flag = 0;
+		}
+
+		/* KEY3：目标转速减少100 RPM */
+		if ((Key3_Flag == 0) && (key3_state == 0))
+		{
+			if (target_rpm > 200)
+			{
+				target_rpm -= 100;
+			}
+
+			Key3_Flag = 1;
+		}
+		else if ((Key3_Flag == 1) && (key3_state == 1))
+		{
+			Key3_Flag = 0;
+		}
+			
 
 //		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
 //		
