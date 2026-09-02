@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,112 +45,13 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-volatile uint8_t motor_step = 0xFF;
-volatile	uint32_t old_time = 0;
-volatile uint16_t speed = 0;
-volatile uint8_t printf_flag =0;
-volatile uint16_t speed_print =0;
-volatile uint16_t target_rpm = 3500;
-volatile uint16_t pwm_value = 420;
-volatile uint8_t motor_run_flag = 1;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-static void Motor_SetStep(uint8_t step)
-{
-  HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Stop(&htim8, TIM_CHANNEL_3);
 
-  HAL_TIMEx_PWMN_Stop(&htim8, TIM_CHANNEL_1);
-  HAL_TIMEx_PWMN_Stop(&htim8, TIM_CHANNEL_2);
-  HAL_TIMEx_PWMN_Stop(&htim8, TIM_CHANNEL_3);
-
-  switch (step)
-  {
-    case 2: //A+ B- 
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
-      break;
-
-    case 6: //B- C+
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
-      break;
-
-    case 4: //A- C+
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
-      break;
-     
-    case 5: //A- B+
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
-      break;
-    
-    case 1: //C- B+
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
-      break;
-      
-    case 3: //C- a+
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, pwm_value);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, 65535); //直接拉到最满，确保恒定导通
-      HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-      HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
-      break;
-    
-    default:
-            /* 非法状态保持三相关闭 */
-      break;
-  }
-}
-
-static uint8_t HALL_Read(void)
-{
-    uint8_t hall_state = 0;
-
-    hall_state |= HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_10) << 2;
-    hall_state |= HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_11) << 1;
-    hall_state |= HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_12);
-
-    return hall_state;
-}
-
-static void Motor_Brake(void)
-{
-  /* 先关闭当前六步换相状态 */
-  Motor_SetStep(0);
-
-  /*
-   * PWM1模式下CCR=0：
-   * CH1/2/3保持低电平，上桥关闭；
-   * CH1N/2N/3N保持高电平，下桥导通。
-   */
-  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, 0);
-  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, 0);
-  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3, 0);
-
-  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
-
-  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
-  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
-  HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -189,221 +90,16 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM8_Init();
   MX_USART1_UART_Init();
-  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-	HAL_TIMEx_HallSensor_Start_IT(&htim5);
+  /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
-HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-
-/*
- * CubeMX的HAL_TIM_PWM_ConfigChannel会开启CCR预装载。
- * 当前模仿502，让CCR修改立即生效。
- */
-__HAL_TIM_DISABLE_OCxPRELOAD(&htim8, TIM_CHANNEL_1);
-__HAL_TIM_DISABLE_OCxPRELOAD(&htim8, TIM_CHANNEL_2);
-__HAL_TIM_DISABLE_OCxPRELOAD(&htim8, TIM_CHANNEL_3);
-
-/* 先配置第一拍：A+、B- */
-
-
-/*
- * 第一次测试时先注释这一句，只观察六路逻辑波形。
- * 波形正确并接好限流电源后，再取消注释。
- */
-HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-HAL_Delay(10);  // 你当前缺的就是这个
-
-motor_step = HALL_Read();
-Motor_SetStep(motor_step);
-//HAL_Delay(100);
-
-//Motor_SetStep(2);
-//HAL_Delay(100);
-
-//Motor_SetStep(3);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  static uint32_t control_time = 0;
-  static int32_t speed_integral = 0;
-
   while (1)
   {
-    static uint8_t Key1_Flag = 0;
-    static uint8_t Key2_Flag = 0;
-    static uint8_t Key3_Flag = 0;
-    static uint8_t Key4_Flag = 0;
-    static uint8_t Key5_Flag = 0;
-
-    uint32_t now = HAL_GetTick();
-    uint8_t key_state = HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin);
-    uint8_t key2_state = HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin);
-    uint8_t key3_state = HAL_GPIO_ReadPin(KEY3_GPIO_Port, KEY3_Pin);
-
-    if (((uint32_t)(now - control_time) >= 30U) && (motor_run_flag == 1))
-    {
-      int32_t speed_error;
-      int32_t pwm_output;
-
-      control_time = now;
-      speed_error = (int32_t)target_rpm - (int32_t)speed_print;
-      speed_integral += speed_error;
-
-      if (speed_integral < 0)
-      {
-        speed_integral = 0;
-      }
-      else if (speed_integral > 42000)
-      {
-        speed_integral = 42000;
-      }
-
-      /* PI控制：Kp = 1，Ki = 1/10 */
-      pwm_output = speed_error + speed_integral / 10;
-
-      if (pwm_output < 0)
-      {
-        pwm_output = 0;
-      }
-      else if (pwm_output > 4200)
-      {
-        pwm_output = 4200;
-      }
-
-      pwm_value = (uint16_t)pwm_output;
-    }
-
-    if (printf_flag == 1)
-    {
-      printf_flag = 0;
-      printf("target=%u rpm=%u pwm=%u\r\n",
-       target_rpm,
-       speed_print,
-       pwm_value);
-    }
-
-    /* 第一次按下：停止电机 */
-    if ((Key1_Flag == 0) && (key_state == 0))
-    {
-      motor_run_flag = 0;
-
-      HAL_TIMEx_HallSensor_Stop_IT(&htim5);
-      Motor_Brake();
-      HAL_Delay(20);
-      Motor_SetStep(0);
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-
-      speed_integral = 0;
-      speed = 0;
-      speed_print = 0;
-      pwm_value = 0;
-      Key1_Flag = 1;
-    }
-    /* 第一次弹起 */
-    else if ((Key1_Flag == 1) && (key_state == 1))
-    {
-      Key1_Flag = 2;
-    }
-    /* 第二次按下：启动电机 */
-    else if ((Key1_Flag == 2) && (key_state == 0))
-    {
-      speed_integral = 0;
-      speed = 0;
-      speed_print = 0;
-
-      /* 给启动第一拍一个确定的占空比 */
-      pwm_value = 420;
-
-      /* 防止启动后立刻执行一次PI */
-      control_time = HAL_GetTick();
-
-      __HAL_TIM_CLEAR_FLAG(&htim5, TIM_FLAG_CC1);
-      HAL_TIMEx_HallSensor_Start_IT(&htim5);
-
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-      HAL_Delay(10);
-
-      motor_run_flag = 1;
-      motor_step = HALL_Read();
-      Motor_SetStep(motor_step);
-      Key1_Flag = 3;
-    }
-    /* 第二次弹起：回到初始状态 */
-    else if ((Key1_Flag == 3) && (key_state == 1))
-    {
-      Key1_Flag = 0;
-    }
-		
-		/* KEY2：目标转速增加100 RPM */
-		if ((Key2_Flag == 0) && (key2_state == 0))
-		{
-			if (target_rpm < 8000)
-			{
-				target_rpm += 100;
-			}
-
-			Key2_Flag = 1;
-		}
-		else if ((Key2_Flag == 1) && (key2_state == 1))
-		{
-			Key2_Flag = 0;
-		}
-
-		/* KEY3：目标转速减少100 RPM */
-		if ((Key3_Flag == 0) && (key3_state == 0))
-		{
-			if (target_rpm > 200)
-			{
-				target_rpm -= 100;
-			}
-
-			Key3_Flag = 1;
-		}
-		else if ((Key3_Flag == 1) && (key3_state == 1))
-		{
-			Key3_Flag = 0;
-		}
-			
-
-//		uint32_t time = __HAL_TIM_GET_COUNTER(&htim5);
-//		
-//		// HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
-//		// HAL_Delay(1000);
-////    Motor_SetStep(motor_step);
-
-////    motor_step++;
-
-////    if (motor_step > 6)
-////    {
-////        motor_step = 1;
-////    }
-//		
-//		volatile uint8_t i = HALL_Read();
-
-//		if (i != motor_step)
-//		{
-//				motor_step = i;
-//				Motor_SetStep(i);
-//				uint32_t timediff = time - old_time; 
-//				if ((old_time != 0) && (timediff != 0))
-//				{
-//						speed += 60000000U / (timediff * 24U);
-//				}
-//				old_time = time;
-//				if(i==1)
-//				{
-//					speed = speed/6;
-//					printf("rpm=%u\r\n",(unsigned int)speed);
-//					speed = 0;
-//					
-//				}
-//		}
-		
-//		volatile uint16_t speed = 0;
-//		speed = 
-    /* 每20ms换一拍 */
-//    HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -457,33 +153,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance == TIM5)
-    {
-        uint32_t time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
-        if (time != 0)
-        {
-            speed += 60000000U / (time * 24U);
-        }
-
-        motor_step = HALL_Read();
-        Motor_SetStep(motor_step);
-
-        if (motor_step == 1)
-        {
-					printf_flag = 1;
-
-					speed_print = speed;
-					speed_print = speed_print / 6;
-					speed =0;
-//            speed = speed / 6;
-//            printf("rpm=%u\r\n", (unsigned int)speed);
-//            speed = 0;
-        }
-    }
-}
 /* USER CODE END 4 */
 
 /**
