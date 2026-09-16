@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,6 +34,16 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define TWO_PI                 6.2831853f
+#define PWM_CALLBACK_HZ        20000.0f   // TIM8 CH4 回调频率，约 20 kHz
+#define OPENLOOP_FREQUENCY_HZ   1.0f       // 初始电频率
+#define OPENLOOP_VOLTAGE_V      1.0f       // 初始电压矢量幅值
+#define SIN_60                 0.8660254f // sqrt(3) / 2
+#define COS_60                 0.5f
+#define CH4_PEAK_OFFSET_TICKS  1U         // CCR4 比 ARR 小 1 个计数
+#define U1_POSITIVE_BIT        (1U << 0)
+#define U2_POSITIVE_BIT        (1U << 1)
+#define U3_POSITIVE_BIT        (1U << 2)
 
 /* USER CODE END PD */
 
@@ -45,7 +55,14 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+volatile float theta = 0.0f;  // 电角度，单位：弧度
+float frequency = OPENLOOP_FREQUENCY_HZ; // 电频率，单位：Hz
+float voltage = OPENLOOP_VOLTAGE_V;      // 电压矢量幅值，单位：V
+volatile float Ualpha = 0.0f;
+volatile float Ubeta  = 0.0f;
+float U1, U2, U3;
+uint8_t N;
+volatile uint8_t sector;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,10 +107,13 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM8_Init();
   MX_USART1_UART_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-
+  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4,
+                        __HAL_TIM_GET_AUTORELOAD(&htim8) - CH4_PEAK_OFFSET_TICKS);
+  HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -153,7 +173,43 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+{
+    if ((htim->Instance == TIM8) &&
+        (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4))
+    {
+			theta += TWO_PI * frequency / PWM_CALLBACK_HZ;
 
+			if (theta >= TWO_PI)
+			{
+				theta -= TWO_PI;
+			}
+
+			Ualpha = voltage * cosf(theta);
+			Ubeta  = voltage * sinf(theta);
+
+			U1 = Ubeta;
+			U2 =  SIN_60 * Ualpha - COS_60 * Ubeta;
+			U3 = -SIN_60 * Ualpha - COS_60 * Ubeta;
+
+			N = 0;
+			if (U1 > 0.0f) N += U1_POSITIVE_BIT;
+			if (U2 > 0.0f) N += U2_POSITIVE_BIT;
+			if (U3 > 0.0f) N += U3_POSITIVE_BIT;
+
+			switch (N)
+			{
+					case (U1_POSITIVE_BIT | U2_POSITIVE_BIT): sector = 1; break;
+					case (U1_POSITIVE_BIT): sector = 2; break;
+					case (U1_POSITIVE_BIT | U3_POSITIVE_BIT): sector = 3; break;
+					case (U3_POSITIVE_BIT): sector = 4; break;
+					case (U2_POSITIVE_BIT | U3_POSITIVE_BIT): sector = 5; break;
+					case (U2_POSITIVE_BIT): sector = 6; break;
+					default: sector = 0; break;
+			}
+        /* 后面在这里计算下一周期的三相占空比 */
+    }
+}
 /* USER CODE END 4 */
 
 /**
