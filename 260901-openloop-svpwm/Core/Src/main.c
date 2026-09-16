@@ -60,6 +60,7 @@ volatile uint8_t sector;
 float Udc = 18.0f;          // 母线电压，单位 V
 float k;
 volatile float Tx, Ty, T0;  // 占整个 PWM 周期的时间比例
+volatile float dutyA, dutyB, dutyC; // 三相上桥臂占空比
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -240,7 +241,52 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 							break;
 			}
 			T0 = 1.0f - Tx - Ty;
-        /* 后面在这里计算下一周期的三相占空比 */
+
+			/* 零矢量时间均分给 000 和 111，再累加有效矢量时间。 */
+			switch (sector)
+			{
+					case 1:
+							dutyC = T0 / 2.0f;
+							dutyB = dutyC + Ty;
+							dutyA = dutyB + Tx;
+							break;
+
+					case 2:
+							dutyC = T0 / 2.0f;
+							dutyA = dutyC + Ty;
+							dutyB = dutyA + Tx;
+							break;
+
+					case 3:
+							dutyA = T0 / 2.0f;
+							dutyC = dutyA + Ty;
+							dutyB = dutyC + Tx;
+							break;
+
+					case 4:
+							dutyA = T0 / 2.0f;
+							dutyB = dutyA + Ty;
+							dutyC = dutyB + Tx;
+							break;
+
+					case 5:
+							dutyB = T0 / 2.0f;
+							dutyA = dutyB + Ty;
+							dutyC = dutyA + Tx;
+							break;
+
+					case 6:
+							dutyB = T0 / 2.0f;
+							dutyC = dutyB + Ty;
+							dutyA = dutyC + Tx;
+							break;
+
+					default:
+							dutyA = 0.0f;
+							dutyB = 0.0f;
+							dutyC = 0.0f;
+							break;
+			}
     }
 }
 /* USER CODE END 4 */
