@@ -37,6 +37,7 @@
 #define TWO_PI                 6.2831853f
 #define SIN_60                 0.8660254f // sqrt(3) / 2
 #define COS_60                 0.5f
+#define SQRT_3                 1.7320508f // 根号 3
 
 /* USER CODE END PD */
 
@@ -56,6 +57,9 @@ volatile float Ubeta  = 0.0f;
 float U1, U2, U3;
 uint8_t N;
 volatile uint8_t sector;
+float Udc = 18.0f;          // 母线电压，单位 V
+float k;
+volatile float Tx, Ty, T0;  // 占整个 PWM 周期的时间比例
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -189,16 +193,53 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 			if (U2 > 0.0f) N += 2;
 			if (U3 > 0.0f) N += 4;
 
+			k = SQRT_3 / Udc;
+
 			switch (N)
 			{
-					case 3: sector = 1; break;
-					case 1: sector = 2; break;
-					case 5: sector = 3; break;
-					case 4: sector = 4; break;
-					case 6: sector = 5; break;
-					case 2: sector = 6; break;
-					default: sector = 0; break;
+					case 3:
+							sector = 1;
+							Tx = k * U2;
+							Ty = k * U1;
+							break;
+
+					case 1:
+							sector = 2;
+							Tx = -k * U2;
+							Ty = -k * U3;
+							break;
+
+					case 5:
+							sector = 3;
+							Tx = k * U1;
+							Ty = k * U3;
+							break;
+
+					case 4:
+							sector = 4;
+							Tx = -k * U1;
+							Ty = -k * U2;
+							break;
+
+					case 6:
+							sector = 5;
+							Tx = k * U3;
+							Ty = k * U2;
+							break;
+
+					case 2:
+							sector = 6;
+							Tx = -k * U3;
+							Ty = -k * U1;
+							break;
+
+					default:
+							sector = 0;
+							Tx = 0.0f;
+							Ty = 0.0f;
+							break;
 			}
+			T0 = 1.0f - Tx - Ty;
         /* 后面在这里计算下一周期的三相占空比 */
     }
 }
