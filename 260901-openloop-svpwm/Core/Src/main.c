@@ -51,7 +51,7 @@
 /* USER CODE BEGIN PV */
 volatile float theta = 0.0f;  // 电角度，单位：弧度
 float frequency = 1.0f;       // 电频率，1 Hz = 电角度每秒转一圈
-float voltage = 1.0f;         // 电压矢量幅值，暂定 1 V
+float voltage = 5.0f;         // 电压矢量幅值，单位 V
 volatile float Ualpha = 0.0f;
 volatile float Ubeta  = 0.0f;
 float U1, U2, U3;
@@ -61,6 +61,7 @@ float Udc = 18.0f;          // 母线电压，单位 V
 float k;
 volatile float Tx, Ty, T0;  // 占整个 PWM 周期的时间比例
 volatile float dutyA, dutyB, dutyC; // 三相上桥臂占空比
+volatile uint8_t motor_request = 0; // while 写请求，中断执行：0 停止，1 运行
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -111,6 +112,17 @@ int main(void)
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
   __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, 4198);
   HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
+	
+	HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
+HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
+
+HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
+HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
+
+HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
+HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
+
+//	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -120,6 +132,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    static uint8_t key_armed = 0;
+
+    /* KEY1：PE0，松开为高，按下为低；硬件已消抖。 */
+    if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
+    {
+        key_armed = 1;
+    }
+    else if (key_armed == 1)
+    {
+        key_armed = 0;
+        motor_request = !motor_request;
+    }
+
+    HAL_Delay(20); // 按键轮询间隔，不阻止 TIM8 中断
   }
   /* USER CODE END 3 */
 }
@@ -175,7 +201,30 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     if ((htim->Instance == TIM8) &&
         (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4))
     {
-			theta += TWO_PI * frequency / 20000.0f;
+        static uint8_t pwm_prepared = 0;
+
+        if (motor_request == 0)
+        {
+            /* 关闭功率级，定时器仍然运行。 */
+            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+            pwm_prepared = 0;
+            theta = 0.0f;
+            return;
+        }
+
+        if (pwm_prepared == 0)
+        {
+            /* 第一次先保持关闭，用零角度计算下面的三路 CCR。 */
+            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+            theta = 0.0f;
+            pwm_prepared = 1;
+        }
+        else
+        {
+            /* 下一次 CH4 中断，上一组 CCR 已经过更新事件装载。 */
+            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+            theta += TWO_PI * frequency / 20000.0f;
+        }
 
 			if (theta >= TWO_PI)
 			{
@@ -288,7 +337,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 							break;
 			}
 
-			/* 占空比换算成比较值，暂不启动三相输出。 */
+			/* 占空比换算成比较值，功率级由上面的启停逻辑控制。 */
 			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1,
 					(uint32_t)(dutyA * __HAL_TIM_GET_AUTORELOAD(&htim8)));
 			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2,
