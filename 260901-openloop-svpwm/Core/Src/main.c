@@ -139,7 +139,8 @@ HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
     {
         key_armed = 1;
     }
-    else if (key_armed == 1)
+    else if ((HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_RESET) &&
+             (key_armed == 1))
     {
         key_armed = 0;
         motor_request = !motor_request;
