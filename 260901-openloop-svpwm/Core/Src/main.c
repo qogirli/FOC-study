@@ -287,6 +287,14 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 							dutyC = 0.0f;
 							break;
 			}
+
+			/* 占空比换算成比较值，暂不启动三相输出。 */
+			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1,
+					(uint32_t)(dutyA * __HAL_TIM_GET_AUTORELOAD(&htim8)));
+			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2,
+					(uint32_t)(dutyB * __HAL_TIM_GET_AUTORELOAD(&htim8)));
+			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3,
+					(uint32_t)(dutyC * __HAL_TIM_GET_AUTORELOAD(&htim8)));
     }
 }
 /* USER CODE END 4 */
