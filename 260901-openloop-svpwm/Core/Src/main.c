@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -51,7 +52,7 @@
 /* USER CODE BEGIN PV */
 volatile float theta = 0.0f;  // 电角度，单位：弧度
 float frequency = 1.0f;       // 电频率，1 Hz = 电角度每秒转一圈
-float voltage = 5.0f;         // 电压矢量幅值，单位 V
+float voltage = 1.0f;         // 电压矢量幅值，单位 V
 volatile float Ualpha = 0.0f;
 volatile float Ubeta  = 0.0f;
 float U1, U2, U3;
@@ -107,6 +108,7 @@ int main(void)
   MX_TIM8_Init();
   MX_USART1_UART_Init();
   MX_TIM5_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
