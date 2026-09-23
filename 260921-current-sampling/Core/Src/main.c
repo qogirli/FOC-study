@@ -113,7 +113,7 @@ int main(void)
   MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
 #if !CURRENT_SAMPLING_ONLY
   __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, 4198);
   HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
@@ -127,7 +127,7 @@ HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
 HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
 HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
 
-//	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+//	HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
 #endif
   /* USER CODE END 2 */
 
@@ -209,7 +209,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 #if CURRENT_SAMPLING_ONLY
     (void)htim;
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
     return;
 #else
     if ((htim->Instance == TIM8) &&
@@ -220,7 +220,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         if (motor_request == 0)
         {
             /* 关闭功率级，定时器仍然运行。 */
-            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
             pwm_prepared = 0;
             theta = 0.0f;
             return;
@@ -229,14 +229,14 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         if (pwm_prepared == 0)
         {
             /* 第一次先保持关闭，用零角度计算下面的三路 CCR。 */
-            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
             theta = 0.0f;
             pwm_prepared = 1;
         }
         else
         {
             /* 下一次 CH4 中断，上一组 CCR 已经过更新事件装载。 */
-            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
             theta += TWO_PI * frequency / 20000.0f;
         }
 
