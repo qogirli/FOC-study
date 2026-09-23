@@ -1,0 +1,11 @@
+655-adc-zero/*
+!655-adc-zero/Src/
+!655-adc-zero/evidence/
+655-adc-zero/Src/*
+!655-adc-zero/Src/main.c
+!655-adc-zero/Src/stm32f4xx_mc_it.c
+655-adc-zero/evidence/*
+!655-adc-zero/evidence/valid-*
+!655-adc-zero/evidence/external-*
+!655-adc-zero/evidence/vref-*
+!655-adc-zero/evidence/restore-original.log
