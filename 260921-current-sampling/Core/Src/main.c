@@ -110,6 +110,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM5_Init();
   MX_ADC1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
