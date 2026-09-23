@@ -42,6 +42,10 @@
 #define CURRENT_SAMPLING_ONLY  1  // 零电流采样阶段：禁止启动功率级
 #define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
 #define ADC_OFFSET_SAMPLES     256U  // 每相零电流偏置的平均次数
+#define ADC_COUNTS_PER_RANGE   4096.0f
+#define ADC_VREF_V             3.3f   // 标称值，后续按 MCU 实际 VREF+ 校正
+#define CURRENT_SHUNT_OHM      0.02f  // 2024版原理图 R12/R18/R24
+#define CURRENT_AMP_GAIN       (5100.0f / (1200.0f + 68.0f))
 
 /* USER CODE END PD */
 
@@ -74,6 +78,8 @@ volatile float adc_u_offset = 0.0f; // 单位为 ADC 码值，还不是安培
 volatile float adc_v_offset = 0.0f;
 volatile uint8_t adc_u_offset_ready = 0; // 仅表示平均完成，不代表硬件校验通过
 volatile uint8_t adc_v_offset_ready = 0;
+volatile float current_u = 0.0f; // A；正号表示采样电压高于零点，暂不用于闭环
+volatile float current_v = 0.0f; // 仅在对应 offset_ready=1 后有效
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,6 +90,13 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static float ADC_ToCurrent(uint16_t raw, float offset)
+{
+    float voltage_delta;
+
+    voltage_delta = ((float)raw - offset) * ADC_VREF_V / ADC_COUNTS_PER_RANGE;
+    return voltage_delta / CURRENT_AMP_GAIN / CURRENT_SHUNT_OHM;
+}
 
 /* USER CODE END 0 */
 
@@ -254,6 +267,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 adc_u_offset_ready = 1;
             }
         }
+        if (adc_u_offset_ready != 0)
+        {
+            current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
+        }
     }
     else if (hadc->Instance == ADC2)
     {
@@ -271,6 +288,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 adc_v_offset = (float)v_sum / ADC_OFFSET_SAMPLES;
                 adc_v_offset_ready = 1;
             }
+        }
+        if (adc_v_offset_ready != 0)
+        {
+            current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
         }
     }
 #else
