@@ -40,6 +40,8 @@
 #define COS_60                 0.5f
 #define SQRT_3                 1.7320508f // 根号 3
 #define CURRENT_SAMPLING_ONLY  1  // 零电流采样阶段：禁止启动功率级
+#define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
+#define ADC_OFFSET_SAMPLES     256U  // 每相零电流偏置的平均次数
 
 /* USER CODE END PD */
 
@@ -64,6 +66,14 @@ float k;
 volatile float Tx, Ty, T0;  // 占整个 PWM 周期的时间比例
 volatile float dutyA, dutyB, dutyC; // 三相上桥臂占空比
 volatile uint8_t motor_request = 0; // while 写请求，中断执行：0 停止，1 运行
+volatile uint16_t adc_u_raw = 0;
+volatile uint16_t adc_v_raw = 0;
+volatile uint32_t adc_u_count = 0;
+volatile uint32_t adc_v_count = 0;
+volatile float adc_u_offset = 0.0f; // 单位为 ADC 码值，还不是安培
+volatile float adc_v_offset = 0.0f;
+volatile uint8_t adc_u_offset_ready = 0; // 仅表示平均完成，不代表硬件校验通过
+volatile uint8_t adc_v_offset_ready = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,6 +124,21 @@ int main(void)
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
+#if CURRENT_SAMPLING_ONLY
+  /* 先让 ADC 等待外部触发，再启动 CH4；CH1~3 保持关闭。 */
+  if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_ADCEx_InjectedStart_IT(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+#endif
 #if !CURRENT_SAMPLING_ONLY
   __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, 4198);
   HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
@@ -205,6 +230,54 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+#if CURRENT_SAMPLING_ONLY
+    static uint32_t u_samples = 0, v_samples = 0;
+    static uint32_t u_sum = 0, v_sum = 0;
+
+    /* 仅在本阶段电机无电流、采样电路供电稳定时，平均值才是零点。 */
+    if (hadc->Instance == ADC1)
+    {
+        adc_u_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+        adc_u_count++;
+        if (adc_u_offset_ready == 0)
+        {
+            u_samples++;
+            if (u_samples > ADC_SETTLE_SAMPLES)
+            {
+                u_sum += adc_u_raw;
+            }
+            if (u_samples == ADC_SETTLE_SAMPLES + ADC_OFFSET_SAMPLES)
+            {
+                adc_u_offset = (float)u_sum / ADC_OFFSET_SAMPLES;
+                adc_u_offset_ready = 1;
+            }
+        }
+    }
+    else if (hadc->Instance == ADC2)
+    {
+        adc_v_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+        adc_v_count++;
+        if (adc_v_offset_ready == 0)
+        {
+            v_samples++;
+            if (v_samples > ADC_SETTLE_SAMPLES)
+            {
+                v_sum += adc_v_raw;
+            }
+            if (v_samples == ADC_SETTLE_SAMPLES + ADC_OFFSET_SAMPLES)
+            {
+                adc_v_offset = (float)v_sum / ADC_OFFSET_SAMPLES;
+                adc_v_offset_ready = 1;
+            }
+        }
+    }
+#else
+    (void)hadc;
+#endif
+}
+
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 #if CURRENT_SAMPLING_ONLY
