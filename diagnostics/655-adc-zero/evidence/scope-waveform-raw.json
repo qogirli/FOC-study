@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "resource": "USB0::0xF4ED::0xEE3A::SDS1EDEQ6R9782::INSTR",
+  "idn": "Siglent Technologies,SDS1102X-C,SDS1EDEQ6R9782,1.3.26",
+  "time_div": "TDIV 1.00E-02S",
+  "sample_rate": "SARA 5.00E+06Sa/s",
+  "sample_rate_hz": 5000000.0,
+  "sample_interval_s": 2e-07,
+  "point_count_per_channel": 700000,
+  "time_span_s": 0.13999979999999998,
+  "channels": {
+    "1": {
+      "vdiv_response": "1.00E-01",
+      "offset_response": "-1.64E+00",
+      "vdiv_v": 0.1,
+      "offset_v": -1.64,
+      "returned_points": 700000,
+      "used_points": 700000,
+      "voltage_min_v": 1.444,
+      "voltage_max_v": 1.8319999999999999,
+      "block": {
+        "response_prefix": "DAT2,",
+        "declared_payload_bytes": 700000,
+        "trailing_bytes": 2
+      }
+    },
+    "2": {
+      "vdiv_response": "1.00E-01",
+      "offset_response": "-1.61E+00",
+      "vdiv_v": 0.1,
+      "offset_v": -1.61,
+      "returned_points": 700000,
+      "used_points": 700000,
+      "voltage_min_v": 1.4140000000000001,
+      "voltage_max_v": 1.814,
+      "block": {
+        "response_prefix": "DAT2,",
+        "declared_payload_bytes": 700000,
+        "trailing_bytes": 2
+      }
+    }
+  },
+  "npz_path": "C:\\Users\\33192\\Desktop\\FOC-study\\diagnostics\\655-adc-zero\\evidence\\scope-noise-data\\waveform_raw.npz",
+  "csv_path": null,
+  "metadata_path": "C:\\Users\\33192\\Desktop\\FOC-study\\diagnostics\\655-adc-zero\\evidence\\scope-noise-data\\waveform_metadata.json",
+  "plot_path": null,
+  "artifact_sizes": {
+    "npz_bytes": 1351092,
+    "metadata_bytes": 1397,
+    "csv_bytes": null,
+    "plot_bytes": null
+  },
+  "plot": null,
+  "idn_after": "Siglent Technologies,SDS1102X-C,SDS1EDEQ6R9782,1.3.26"
+}

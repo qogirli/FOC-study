@@ -9,3 +9,8 @@
 !655-adc-zero/evidence/external-*
 !655-adc-zero/evidence/vref-*
 !655-adc-zero/evidence/restore-original.log
+!655-adc-zero/evidence/scope-noise.bmp
+!655-adc-zero/evidence/scope-C1-raw.json
+!655-adc-zero/evidence/scope-C2-raw.json
+!655-adc-zero/evidence/scope-waveform-raw.json
+!655-adc-zero/evidence/scope-noise-data/

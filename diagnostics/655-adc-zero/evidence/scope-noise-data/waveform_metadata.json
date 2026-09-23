@@ -1,0 +1,46 @@
+{
+  "instrument": "Siglent Technologies,SDS1102X-C,SDS1EDEQ6R9782,1.3.26",
+  "resource": "USB0::0xF4ED::0xEE3A::SDS1EDEQ6R9782::INSTR",
+  "captured": "2026-09-23 18:09:30",
+  "time_div_response": "TDIV 1.00E-02S",
+  "sample_rate_response": "SARA 5.00E+06Sa/s",
+  "sample_rate_hz": 5000000.0,
+  "sample_interval_s": 2e-07,
+  "point_count_per_channel": 700000,
+  "time_span_s": 0.13999979999999998,
+  "time_origin": "record_start",
+  "channels": {
+    "1": {
+      "vdiv_response": "1.00E-01",
+      "offset_response": "-1.64E+00",
+      "vdiv_v": 0.1,
+      "offset_v": -1.64,
+      "returned_points": 700000,
+      "used_points": 700000,
+      "voltage_min_v": 1.444,
+      "voltage_max_v": 1.8319999999999999,
+      "block": {
+        "response_prefix": "DAT2,",
+        "declared_payload_bytes": 700000,
+        "trailing_bytes": 2
+      }
+    },
+    "2": {
+      "vdiv_response": "1.00E-01",
+      "offset_response": "-1.61E+00",
+      "vdiv_v": 0.1,
+      "offset_v": -1.61,
+      "returned_points": 700000,
+      "used_points": 700000,
+      "voltage_min_v": 1.4140000000000001,
+      "voltage_max_v": 1.814,
+      "block": {
+        "response_prefix": "DAT2,",
+        "declared_payload_bytes": 700000,
+        "trailing_bytes": 2
+      }
+    }
+  },
+  "post_transfer_idn": "Siglent Technologies,SDS1102X-C,SDS1EDEQ6R9782,1.3.26",
+  "plot": null
+}
