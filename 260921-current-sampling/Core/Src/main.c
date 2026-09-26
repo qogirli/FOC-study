@@ -80,6 +80,10 @@ volatile uint8_t adc_u_offset_ready = 0; // 仅表示平均完成，不代表硬
 volatile uint8_t adc_v_offset_ready = 0;
 volatile float current_u = 0.0f; // A；正号表示采样电压高于零点，暂不用于闭环
 volatile float current_v = 0.0f; // 仅在对应 offset_ready=1 后有效
+volatile float current_w = 0.0f; // 由 U、V 重建，不是第三路实测值
+volatile float current_alpha = 0.0f;
+volatile float current_beta = 0.0f;
+volatile uint32_t clarke_count = 0; // 每完成一对电流的 Clarke 计算加 1
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,6 +100,17 @@ static float ADC_ToCurrent(uint16_t raw, float offset)
 
     voltage_delta = ((float)raw - offset) * ADC_VREF_V / ADC_COUNTS_PER_RANGE;
     return voltage_delta / CURRENT_AMP_GAIN / CURRENT_SHUNT_OHM;
+}
+
+/* 等幅值 Clarke，alpha 轴与 U 相重合；本阶段仅观察，不用于闭环。
+ * 沿用 ADC_ToCurrent 的正号，实际电机相电流方向仍需后续验证。
+ */
+static void Clarke_Update(float iu, float iv)
+{
+    current_w = -iu - iv;
+    current_alpha = iu;
+    current_beta = (iu + 2.0f * iv) / SQRT_3;
+    clarke_count++;
 }
 
 /* USER CODE END 0 */
@@ -267,10 +282,6 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 adc_u_offset_ready = 1;
             }
         }
-        if (adc_u_offset_ready != 0)
-        {
-            current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
-        }
     }
     else if (hadc->Instance == ADC2)
     {
@@ -289,10 +300,22 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 adc_v_offset_ready = 1;
             }
         }
-        if (adc_v_offset_ready != 0)
-        {
-            current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
-        }
+    }
+    else
+    {
+        return;
+    }
+
+    /* 两路同由 TIM8 CH4 触发：正常无漏采时，计数相等表示本轮都已更新。
+     * 不在第一路刚更新时计算，避免混用上一轮的另一路数据。
+     * 这是学习阶段配对；长时间停机调试/漏采后须重启采样，不能据此检测所有漏采。
+     */
+    if ((adc_u_offset_ready != 0) && (adc_v_offset_ready != 0) &&
+        (adc_u_count == adc_v_count))
+    {
+        current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
+        current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
+        Clarke_Update(current_u, current_v);
     }
 #else
     (void)hadc;
