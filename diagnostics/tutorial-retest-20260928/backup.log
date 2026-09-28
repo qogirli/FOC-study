@@ -1,0 +1,66 @@
+SEGGER J-Link Commander V7.92m (Compiled Oct 26 2023 16:16:37)
+DLL version V7.98c, compiled Aug  7 2024 15:37:06
+
+Connecting to J-Link via USB...O.K.
+Firmware: J-Link V9 compiled May  7 2021 16:26:12
+Hardware version: V9.60
+J-Link uptime (since boot): N/A (Not supported by this model)
+S/N: 69610111
+License(s): GDB, RDI, FlashBP, FlashDL, JFlash
+VTref=3.248V
+Device "STM32F407IG" selected.
+
+
+Connecting to target via SWD
+InitTarget() start
+SWD selected. Executing JTAG -> SWD switching sequence.
+DAP initialized successfully.
+InitTarget() end - Took 12.8ms
+Found SW-DP with ID 0x2BA01477
+DPIDR: 0x2BA01477
+CoreSight SoC-400 or earlier
+Scanning AP map to find all available APs
+AP[1]: Stopped AP scan as end of AP map has been reached
+AP[0]: AHB-AP (IDR: 0x24770011)
+Iterating through AP map to find AHB-AP to use
+AP[0]: Core found
+AP[0]: AHB-AP ROM base: 0xE00FF000
+CPUID register: 0x410FC241. Implementer code: 0x41 (ARM)
+Found Cortex-M4 r0p1, Little endian.
+FPUnit: 6 code (BP) slots and 2 literal slots
+CoreSight components:
+ROMTbl[0] @ E00FF000
+[0][0]: E000E000 CID B105E00D PID 000BB00C SCS-M7
+[0][1]: E0001000 CID B105E00D PID 003BB002 DWT
+[0][2]: E0002000 CID B105E00D PID 002BB003 FPB
+[0][3]: E0000000 CID B105E00D PID 003BB001 ITM
+[0][4]: E0040000 CID B105900D PID 000BB9A1 TPIU
+[0][5]: E0041000 CID B105900D PID 000BB925 ETM
+Memory zones:
+  Zone: "Default" Description: Default access mode
+Cortex-M4 identified.
+J-Link>Writing 00000000 -> 4001040C
+J-Link>Writing 02000000 -> 40021C18
+J-Link>PC = 08000F22, CycleCnt = 0047AAA4
+R0 = 200000C0, R1 = 00000016, R2 = 00000000, R3 = 20000080
+R4 = 00000015, R5 = 0012AA5E, R6 = 40021000, R7 = 00000001
+R8 = 00000000, R9 = 00000000, R10= 00000000, R11= 00000000
+R12= 00000001
+SP(R13)= 20000630, MSP= 20000630, PSP= 00000000, R14(LR) = 08000D11
+XPSR = 81000000: APSR = Nzcvq, EPSR = 01000000, IPSR = 000 (NoException)
+CFBP = 04000000, CONTROL = 04, FAULTMASK = 00, BASEPRI = 00, PRIMASK = 00
+
+FPS0 = 00000000, FPS1 = 00001073, FPS2 = FFFFF8E7, FPS3 = FFFFFFFE
+FPS4 = 0000000A, FPS5 = 00000FCC, FPS6 = BB0ED3E8, FPS7 = 00000000
+FPS8 = 41B136F0, FPS9 = 00000000, FPS10= 00000000, FPS11= 00000000
+FPS12= 00000000, FPS13= 00000000, FPS14= 00000000, FPS15= 00000000
+FPS16= 00000000, FPS17= 00000000, FPS18= 00000000, FPS19= 00000000
+FPS20= 00000000, FPS21= 00000000, FPS22= 00000000, FPS23= 00000000
+FPS24= 00000000, FPS25= 00000000, FPS26= 00000000, FPS27= 00000000
+FPS28= 00000000, FPS29= 00000000, FPS30= 00000000, FPS31= 00000000
+FPSCR= 00000010
+J-Link>Writing 02000000 -> 40021C18
+J-Link>Opening binary file for writing... [C:\Users\33192\Desktop\FOC-study\diagnostics\tutorial-retest-20260928/before.bin]
+Reading 1048576 bytes from addr 0x08000000 into file...O.K.
+J-Link>OnDisconnectTarget() start
+OnDisconnectTarget() end - Took 1.57ms
