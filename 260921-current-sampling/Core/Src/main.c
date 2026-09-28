@@ -87,6 +87,10 @@ volatile float current_d = 0.0f; // Park 输出，单位 A；本阶段仅观察
 volatile float current_q = 0.0f;
 volatile float park_angle = 0.0f; // 测试坐标角度，单位 rad；尚未接入转子电角度
 volatile uint32_t clarke_count = 0; // 每完成一对电流的 Clarke 计算加 1
+volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
+volatile int8_t hall_direction = 0;    // 最近一次边沿：+1 正向，-1 反向，0 未确定
+volatile uint32_t hall_period_us = 0; // 两次捕获的间隔；TIM5 每计数一次为 1 us
+volatile uint32_t hall_edge_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -168,6 +172,11 @@ int main(void)
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
 #if CURRENT_SAMPLING_ONLY
+  /* 只观察霍尔，不改变 park_angle，也不打开功率级。 */
+  if (HAL_TIMEx_HallSensor_Start_IT(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* 先让 ADC 等待外部触发，再启动 CH4；CH1~3 保持关闭。 */
   if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK)
   {
@@ -273,6 +282,50 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    /* 教程正向顺序：5 -> 1 -> 3 -> 2 -> 6 -> 4 -> 5。
+     * 下标是当前霍尔状态，表内值是正向的下一个状态。
+     */
+    static const uint8_t next_state[8] = {0, 3, 6, 2, 5, 1, 4, 0};
+    static uint8_t previous_state = 0;
+    uint32_t captured_us;
+
+    if ((htim->Instance != TIM5) ||
+        (htim->Channel != HAL_TIM_ACTIVE_CHANNEL_1))
+    {
+        return;
+    }
+
+    captured_us = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    hall_state = (uint8_t)((GPIOH->IDR >> 10U) & 0x07U);
+    hall_edge_count++;
+    hall_direction = 0;
+    hall_period_us = 0;
+
+    if ((hall_state == 0U) || (hall_state == 7U))
+    {
+        previous_state = 0; // 120度霍尔的无效状态，不参与方向判断
+        return;
+    }
+
+    if (previous_state != 0U)
+    {
+        if (next_state[previous_state] == hall_state)
+            hall_direction = 1;
+        else if (next_state[hall_state] == previous_state)
+            hall_direction = -1;
+
+        /* 复位模式下 CCR1 已是间隔，不再减上一次 CCR1。
+         * 第一次捕获只记录状态；重复或跳变状态不作为有效间隔。
+         */
+        if (hall_direction != 0)
+            hall_period_us = captured_us;
+    }
+
+    previous_state = hall_state;
+}
+
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
 #if CURRENT_SAMPLING_ONLY
