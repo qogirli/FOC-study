@@ -83,6 +83,9 @@ volatile float current_v = 0.0f; // 仅在对应 offset_ready=1 后有效
 volatile float current_w = 0.0f; // 由 U、V 重建，不是第三路实测值
 volatile float current_alpha = 0.0f;
 volatile float current_beta = 0.0f;
+volatile float current_d = 0.0f; // Park 输出，单位 A；本阶段仅观察
+volatile float current_q = 0.0f;
+volatile float park_angle = 0.0f; // 测试坐标角度，单位 rad；尚未接入转子电角度
 volatile uint32_t clarke_count = 0; // 每完成一对电流的 Clarke 计算加 1
 /* USER CODE END PV */
 
@@ -111,6 +114,18 @@ static void Clarke_Update(float iu, float iv)
     current_alpha = iu;
     current_beta = (iu + 2.0f * iv) / SQRT_3;
     clarke_count++;
+}
+
+/* 将静止 alpha/beta 坐标投影到角度为 angle 的 d/q 坐标。
+ * 用于真实 FOC 时，angle 必须换成与采样时刻对应的转子电角度。
+ */
+static void Park_Update(float alpha, float beta, float angle)
+{
+    float sin_angle = sinf(angle);
+    float cos_angle = cosf(angle);
+
+    current_d =  alpha * cos_angle + beta * sin_angle;
+    current_q = -alpha * sin_angle + beta * cos_angle;
 }
 
 /* USER CODE END 0 */
@@ -316,6 +331,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
         current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
         Clarke_Update(current_u, current_v);
+        /* 顺序执行两个变换；测试角度为 0 时，d=alpha、q=beta。 */
+        Park_Update(current_alpha, current_beta, park_angle);
     }
 #else
     (void)hadc;
