@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +41,8 @@
 #define COS_60                 0.5f
 #define SQRT_3                 1.7320508f // 根号 3
 #define PWM_UPDATE_HZ          20000.0f // TIM8 CH4 每个 PWM 周期计算一次
+#define MONITOR_PERIOD_MS      100U    // 串口每秒打印 10 行
+#define MONITOR_TX_TIMEOUT_MS  5U      // 打印超时就放弃本行，不影响启停逻辑
 #define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
 #define ADC_OFFSET_SAMPLES     256U  // 每相零电流偏置的平均次数
 #define ADC_COUNTS_PER_RANGE   4096.0f
@@ -130,6 +133,58 @@ static void Park_Update(float alpha, float beta, float angle)
 
     current_d =  alpha * cos_angle + beta * sin_angle;
     current_q = -alpha * sin_angle + beta * cos_angle;
+}
+
+/* 只在主循环调用。沿用 USART1 的 921600 波特率，不使用中断内 printf。 */
+static void Monitor_Print(void)
+{
+    static uint32_t last_ms = 0, last_pairs = 0;
+    char line[192];
+    uint32_t now = HAL_GetTick(), primask, period, edges, pairs;
+    uint8_t request, enabled, calibrated, state;
+    int8_t direction;
+    float iu, iv;
+    int length;
+
+    if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
+        return;
+    last_ms = now;
+
+    /* 仅复制数据时短暂屏蔽中断，避免同一行混入更新前后的值。
+     * 格式化和串口发送时中断正常运行。
+     */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    request = motor_request;
+    enabled = (MOTOR_EN_GPIO_Port->ODR & MOTOR_EN_Pin) != 0U;
+    calibrated = (adc_u_offset_ready != 0U) && (adc_v_offset_ready != 0U);
+    state = hall_state;
+    direction = hall_direction;
+    period = hall_period_us;
+    edges = hall_edge_count;
+    pairs = clarke_count;
+    iu = current_u;
+    iv = current_v;
+    __set_PRIMASK(primask);
+
+    /* 电流打印为 mA，避免引入浮点 printf。pairs 是两行之间处理的电流对数。
+     * 霍尔数据是最近一次捕获值；停转后可能不变，不代表仍在转。
+     */
+    length = snprintf(line, sizeof(line),
+        "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu "
+        "Iu_mA=%ld Iv_mA=%ld pairs=%lu\r\n",
+        (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
+        (unsigned)state, (int)direction, (unsigned long)period,
+        (unsigned long)edges, (long)(iu * 1000.0f), (long)(iv * 1000.0f),
+        (unsigned long)(pairs - last_pairs));
+    last_pairs = pairs;
+
+    if ((length > 0) && (length < (int)sizeof(line)))
+    {
+        /* 主循环短时轮询发送；PWM/ADC/霍尔中断仍可抢占。超时不重试。 */
+        (void)HAL_UART_Transmit(&huart1, (uint8_t *)line,
+                                (uint16_t)length, MONITOR_TX_TIMEOUT_MS);
+    }
 }
 
 /* USER CODE END 0 */
@@ -230,6 +285,7 @@ int main(void)
         motor_request = !motor_request;
     }
 
+    Monitor_Print();
     HAL_Delay(20); // 按键轮询间隔，不阻止 TIM8 中断
   }
   /* USER CODE END 3 */
