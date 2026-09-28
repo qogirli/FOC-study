@@ -1,0 +1,107 @@
+{
+  "rows": 607,
+  "transitions": [
+    {
+      "ms": 10,
+      "state": 16,
+      "faults": 0,
+      "hall_edges": 0,
+      "rpm": 0,
+      "iq": 0,
+      "id": 0,
+      "iu": 0,
+      "iv": 0,
+      "bus_v": 17,
+      "temp_c": 29,
+      "reliable": 1
+    },
+    {
+      "ms": 20,
+      "state": 4,
+      "faults": 0,
+      "hall_edges": 0,
+      "rpm": 0,
+      "iq": -1028,
+      "id": -811,
+      "iu": -811,
+      "iv": -485,
+      "bus_v": 17,
+      "temp_c": 29,
+      "reliable": 0
+    },
+    {
+      "ms": 1730,
+      "state": 6,
+      "faults": 0,
+      "hall_edges": 137,
+      "rpm": 654,
+      "iq": 2010,
+      "id": -278,
+      "iu": -1819,
+      "iv": 123,
+      "bus_v": 18,
+      "temp_c": 29,
+      "reliable": 1
+    },
+    {
+      "ms": 5010,
+      "state": 8,
+      "faults": 0,
+      "hall_edges": 1474,
+      "rpm": 888,
+      "iq": 0,
+      "id": 0,
+      "iu": 0,
+      "iv": 0,
+      "bus_v": 17,
+      "temp_c": 29,
+      "reliable": 1
+    },
+    {
+      "ms": 5410,
+      "state": 0,
+      "faults": 0,
+      "hall_edges": 1482,
+      "rpm": 0,
+      "iq": 0,
+      "id": 0,
+      "iu": 0,
+      "iv": 0,
+      "bus_v": 17,
+      "temp_c": 29,
+      "reliable": 1
+    }
+  ],
+  "run_start_ms": 1730,
+  "run_last_sample_ms": 5000,
+  "run_reliable": true,
+  "any_fault": false,
+  "steady_observer_rpm": {
+    "min": 858,
+    "max": 1098,
+    "mean": 994.83
+  },
+  "steady_hall_rpm": 1001.2562814070352,
+  "steady_iq_raw": {
+    "min": -2398,
+    "max": 10467,
+    "mean": 824.99
+  },
+  "steady_id_raw": {
+    "min": -8056,
+    "max": 3650,
+    "mean": -34.165
+  },
+  "bus_volts": {
+    "min": 16,
+    "max": 18,
+    "mean": 17.255354200988467
+  },
+  "temperature_c": {
+    "min": 29,
+    "max": 29,
+    "mean": 29
+  },
+  "flash_before_sha256": "67476df781bb38073946ad51b3635b20c71cd2206509b81aa6cebaa9ca3df75e",
+  "flash_restored_sha256": "67476df781bb38073946ad51b3635b20c71cd2206509b81aa6cebaa9ca3df75e"
+}
