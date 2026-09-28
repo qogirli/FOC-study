@@ -1,0 +1,46 @@
+diff --git a/260921-current-sampling/Core/Src/main.c b/260921-current-sampling/Core/Src/main.c
+index fbfc4e4..caa62ed 100644
+--- a/260921-current-sampling/Core/Src/main.c
++++ b/260921-current-sampling/Core/Src/main.c
+@@ -112,6 +112,7 @@ void SystemClock_Config(void);
+ 
+ /* Private user code ---------------------------------------------------------*/
+ /* USER CODE BEGIN 0 */
++#include "../../../diagnostics/adc-raw-20260928/adc_diag.h"
+ static float ADC_ToCurrent(uint16_t raw, float offset)
+ {
+     float voltage_delta;
+@@ -296,6 +297,12 @@ int main(void)
+     /* USER CODE BEGIN 3 */
+     static uint8_t key_armed = 0;
+ 
++    if (diag_enabled) {
++        Diag_Poll();
++        HAL_Delay(1);
++        continue; /* Temporary diagnostic: no key-controlled motor start. */
++    }
++
+     /* 校准期间不接受启动，也不记住提前按下的按键。 */
+     if ((adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
+     {
+@@ -481,6 +488,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+         (adc_u_count == adc_v_count))
+     {
+         current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
++        Diag_Sample();
+         current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
+         Clarke_Update(current_u, current_v);
+         /* 顺序执行两个变换；测试角度为 0 时，d=alpha、q=beta。 */
+@@ -512,6 +520,12 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+     {
+         static uint8_t pwm_prepared = 0;
+ 
++        if (diag_running && (uint32_t)(HAL_GetTick() - diag_start_ms) >= 3500U)
++        {
++            motor_request = 0;
++            diag_running = 0;
++        }
++
+         if ((motor_request == 0) ||
+             (adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
+         {

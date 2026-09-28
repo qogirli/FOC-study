@@ -1,0 +1,686 @@
+[
+  {
+    "t_s": 0.025828699999692617,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3079 Iu_max=2609 Iv_avg_mA=13 Iv_min=-2685 Iv_max=2442 pairs=2120"
+  },
+  {
+    "t_s": 0.1318703999995705,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-3810 Iu_max=4602 Iv_avg_mA=11 Iv_min=-3336 Iv_max=2532 pairs=2121"
+  },
+  {
+    "t_s": 0.23795199999949546,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3670 Iu_max=3039 Iv_avg_mA=16 Iv_min=-3466 Iv_max=2752 pairs=2120"
+  },
+  {
+    "t_s": 0.3439316999993025,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-3390 Iu_max=3971 Iv_avg_mA=17 Iv_min=-3156 Iv_max=2542 pairs=2121"
+  },
+  {
+    "t_s": 0.45002279999971506,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-2759 Iu_max=1808 Iv_avg_mA=15 Iv_min=-2365 Iv_max=1911 pairs=2120"
+  },
+  {
+    "t_s": 0.5559100999998918,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=12 Iu_min=-2999 Iu_max=2859 Iv_avg_mA=20 Iv_min=-1433 Iv_max=1951 pairs=2121"
+  },
+  {
+    "t_s": 0.661967499999264,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-5042 Iu_max=4341 Iv_avg_mA=15 Iv_min=-3426 Iv_max=4124 pairs=2120"
+  },
+  {
+    "t_s": 0.7680412999998225,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-1787 Iu_max=3340 Iv_avg_mA=10 Iv_min=-2375 Iv_max=3413 pairs=2121"
+  },
+  {
+    "t_s": 0.8738574999997581,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-2087 Iu_max=6184 Iv_avg_mA=15 Iv_min=-1754 Iv_max=4545 pairs=2120"
+  },
+  {
+    "t_s": 0.979910199999722,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-7 Iu_min=-2769 Iu_max=6084 Iv_avg_mA=6 Iv_min=-2685 Iv_max=3433 pairs=2121"
+  },
+  {
+    "t_s": 1.085940899999514,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-4942 Iu_max=2819 Iv_avg_mA=10 Iv_min=-4087 Iv_max=2742 pairs=2120"
+  },
+  {
+    "t_s": 1.192113000000063,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-2658 Iu_max=2579 Iv_avg_mA=18 Iv_min=-1904 Iv_max=2241 pairs=2121"
+  },
+  {
+    "t_s": 1.297814799999287,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3650 Iu_max=1727 Iv_avg_mA=14 Iv_min=-1744 Iv_max=1160 pairs=2120"
+  },
+  {
+    "t_s": 1.4038664999998218,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-2077 Iu_max=4422 Iv_avg_mA=14 Iv_min=-2645 Iv_max=2281 pairs=2121"
+  },
+  {
+    "t_s": 1.5099568999994517,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-3069 Iu_max=7506 Iv_avg_mA=11 Iv_min=-2565 Iv_max=5296 pairs=2120"
+  },
+  {
+    "t_s": 1.6159137999993618,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=10 Iu_min=-2148 Iu_max=6244 Iv_avg_mA=19 Iv_min=-2475 Iv_max=3393 pairs=2121"
+  },
+  {
+    "t_s": 1.7220179999994798,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=13 Iu_min=-1567 Iu_max=4051 Iv_avg_mA=22 Iv_min=-1173 Iv_max=3203 pairs=2120"
+  },
+  {
+    "t_s": 1.8279874999998356,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-3319 Iu_max=1888 Iv_avg_mA=11 Iv_min=-2154 Iv_max=2372 pairs=2121"
+  },
+  {
+    "t_s": 1.9338502000000517,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-4241 Iu_max=4041 Iv_avg_mA=15 Iv_min=-3807 Iv_max=3964 pairs=2120"
+  },
+  {
+    "t_s": 2.0398959999993167,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-3630 Iu_max=3120 Iv_avg_mA=11 Iv_min=-2335 Iv_max=2672 pairs=2121"
+  },
+  {
+    "t_s": 2.145949799999471,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-5 Iu_min=-4020 Iu_max=1938 Iv_avg_mA=11 Iv_min=-1824 Iv_max=1270 pairs=2120"
+  },
+  {
+    "t_s": 2.2519509999992806,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-4371 Iu_max=3540 Iv_avg_mA=13 Iv_min=-3537 Iv_max=3413 pairs=2121"
+  },
+  {
+    "t_s": 2.357837099999415,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-2919 Iu_max=5163 Iv_avg_mA=20 Iv_min=-1924 Iv_max=4595 pairs=2120"
+  },
+  {
+    "t_s": 2.463840899999923,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3390 Iu_max=3761 Iv_avg_mA=16 Iv_min=-2064 Iv_max=3393 pairs=2121"
+  },
+  {
+    "t_s": 2.5698765999995885,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3229 Iu_max=6335 Iv_avg_mA=10 Iv_min=-2765 Iv_max=5276 pairs=2120"
+  },
+  {
+    "t_s": 2.6758970000000772,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2248 Iu_max=3731 Iv_avg_mA=8 Iv_min=-2685 Iv_max=2442 pairs=2121"
+  },
+  {
+    "t_s": 2.781980400000066,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2118 Iu_max=2929 Iv_avg_mA=16 Iv_min=-1884 Iv_max=2372 pairs=2120"
+  },
+  {
+    "t_s": 2.8880020999995395,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-4181 Iu_max=5343 Iv_avg_mA=11 Iv_min=-3667 Iv_max=4375 pairs=2121"
+  },
+  {
+    "t_s": 2.9938758999996935,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2077 Iu_max=4021 Iv_avg_mA=17 Iv_min=-2305 Iv_max=1931 pairs=2120"
+  },
+  {
+    "t_s": 3.0999212999995507,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-2518 Iu_max=3540 Iv_avg_mA=16 Iv_min=-2365 Iv_max=3343 pairs=2121"
+  },
+  {
+    "t_s": 3.20588509999925,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-4051 Iu_max=3150 Iv_avg_mA=10 Iv_min=-3517 Iv_max=2392 pairs=2120"
+  },
+  {
+    "t_s": 3.311908699999549,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-3359 Iu_max=3570 Iv_avg_mA=14 Iv_min=-3076 Iv_max=2842 pairs=2121"
+  },
+  {
+    "t_s": 3.417959499999597,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-4842 Iu_max=5864 Iv_avg_mA=13 Iv_min=-4378 Iv_max=4365 pairs=2120"
+  },
+  {
+    "t_s": 3.52386690000003,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-2067 Iu_max=1637 Iv_avg_mA=11 Iv_min=-1974 Iv_max=1350 pairs=2121"
+  },
+  {
+    "t_s": 3.6298932999998215,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3309 Iu_max=5724 Iv_avg_mA=14 Iv_min=-3286 Iv_max=4365 pairs=2120"
+  },
+  {
+    "t_s": 3.7359802000000855,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-1747 Iu_max=4372 Iv_avg_mA=17 Iv_min=-1403 Iv_max=4124 pairs=2121"
+  },
+  {
+    "t_s": 3.8418664000000717,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-1757 Iu_max=6375 Iv_avg_mA=16 Iv_min=-2445 Iv_max=4265 pairs=2120"
+  },
+  {
+    "t_s": 3.9479932999993252,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-2358 Iu_max=2769 Iv_avg_mA=17 Iv_min=-2395 Iv_max=2201 pairs=2121"
+  },
+  {
+    "t_s": 4.053979999999683,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-4161 Iu_max=6144 Iv_avg_mA=16 Iv_min=-3567 Iv_max=5306 pairs=2120"
+  },
+  {
+    "t_s": 4.1598700999993525,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-1977 Iu_max=2609 Iv_avg_mA=10 Iv_min=-2785 Iv_max=3083 pairs=2121"
+  },
+  {
+    "t_s": 4.265925400000015,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-3440 Iu_max=4111 Iv_avg_mA=17 Iv_min=-3036 Iv_max=3724 pairs=2120"
+  },
+  {
+    "t_s": 4.372053600000072,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3630 Iu_max=5163 Iv_avg_mA=11 Iv_min=-3236 Iv_max=3213 pairs=2121"
+  },
+  {
+    "t_s": 4.477933299999677,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-4091 Iu_max=3560 Iv_avg_mA=9 Iv_min=-2235 Iv_max=3013 pairs=2120"
+  },
+  {
+    "t_s": 4.5839515999996365,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-3159 Iu_max=8097 Iv_avg_mA=18 Iv_min=-3026 Iv_max=5446 pairs=2121"
+  },
+  {
+    "t_s": 4.689918899999611,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-4371 Iu_max=7867 Iv_avg_mA=12 Iv_min=-2074 Iv_max=5026 pairs=2120"
+  },
+  {
+    "t_s": 4.795904399999927,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-1817 Iu_max=8057 Iv_avg_mA=14 Iv_min=-2054 Iv_max=5697 pairs=2121"
+  },
+  {
+    "t_s": 4.901939599999423,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-4 Iu_min=-2438 Iu_max=1968 Iv_avg_mA=9 Iv_min=-2745 Iv_max=1360 pairs=2120"
+  },
+  {
+    "t_s": 5.008068000000094,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-1487 Iu_max=1727 Iv_avg_mA=11 Iv_min=-1323 Iv_max=1280 pairs=2121"
+  },
+  {
+    "t_s": 5.113882499999818,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-1426 Iu_max=7897 Iv_avg_mA=15 Iv_min=-1994 Iv_max=5406 pairs=2120"
+  },
+  {
+    "t_s": 5.219949899999847,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-2979 Iu_max=4622 Iv_avg_mA=14 Iv_min=-2715 Iv_max=4495 pairs=2121"
+  },
+  {
+    "t_s": 5.325967099999616,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-3710 Iu_max=4372 Iv_avg_mA=13 Iv_min=-3186 Iv_max=3914 pairs=2120"
+  },
+  {
+    "t_s": 5.431878499999584,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-3920 Iu_max=5413 Iv_avg_mA=23 Iv_min=-3797 Iv_max=4034 pairs=2121"
+  },
+  {
+    "t_s": 5.537913199999821,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-9 Iu_min=-4511 Iu_max=4351 Iv_avg_mA=6 Iv_min=-3617 Iv_max=2672 pairs=2120"
+  },
+  {
+    "t_s": 5.643956799999614,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-3550 Iu_max=7627 Iv_avg_mA=17 Iv_min=-3266 Iv_max=4695 pairs=2121"
+  },
+  {
+    "t_s": 5.749863199999709,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-6 Iu_min=-1797 Iu_max=1898 Iv_avg_mA=6 Iv_min=-1433 Iv_max=1290 pairs=2120"
+  },
+  {
+    "t_s": 5.855953299999783,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-2538 Iu_max=3400 Iv_avg_mA=11 Iv_min=-2465 Iv_max=2842 pairs=2121"
+  },
+  {
+    "t_s": 5.961951599999338,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3750 Iu_max=5263 Iv_avg_mA=11 Iv_min=-2966 Iv_max=4134 pairs=2120"
+  },
+  {
+    "t_s": 6.06801329999962,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3720 Iu_max=2509 Iv_avg_mA=18 Iv_min=-2445 Iv_max=2261 pairs=2121"
+  },
+  {
+    "t_s": 6.173867200000132,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3850 Iu_max=2719 Iv_avg_mA=12 Iv_min=-3216 Iv_max=1791 pairs=2120"
+  },
+  {
+    "t_s": 6.279944199999591,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-1687 Iu_max=7106 Iv_avg_mA=17 Iv_min=-2475 Iv_max=5176 pairs=2121"
+  },
+  {
+    "t_s": 6.386000299999978,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-1827 Iu_max=5784 Iv_avg_mA=13 Iv_min=-2555 Iv_max=4635 pairs=2120"
+  },
+  {
+    "t_s": 6.491867899999306,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-1807 Iu_max=4091 Iv_avg_mA=11 Iv_min=-1614 Iv_max=3363 pairs=2121"
+  },
+  {
+    "t_s": 6.59792859999925,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-2819 Iu_max=8047 Iv_avg_mA=14 Iv_min=-2785 Iv_max=5647 pairs=2120"
+  },
+  {
+    "t_s": 6.704037299999982,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-5 Iu_min=-4301 Iu_max=2218 Iv_avg_mA=8 Iv_min=-3907 Iv_max=1160 pairs=2121"
+  },
+  {
+    "t_s": 6.810011300000042,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-7 Iu_min=-4531 Iu_max=3490 Iv_avg_mA=7 Iv_min=-2966 Iv_max=3543 pairs=2120"
+  },
+  {
+    "t_s": 6.915891399999964,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-1507 Iu_max=1928 Iv_avg_mA=12 Iv_min=-1854 Iv_max=1771 pairs=2121"
+  },
+  {
+    "t_s": 7.022027799999705,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-4611 Iu_max=3420 Iv_avg_mA=10 Iv_min=-4248 Iv_max=2902 pairs=2120"
+  },
+  {
+    "t_s": 7.128023799999937,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-3830 Iu_max=3220 Iv_avg_mA=10 Iv_min=-2926 Iv_max=2402 pairs=2121"
+  },
+  {
+    "t_s": 7.23388900000009,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3109 Iu_max=3310 Iv_avg_mA=11 Iv_min=-2946 Iv_max=2812 pairs=2120"
+  },
+  {
+    "t_s": 7.340010299999449,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-1637 Iu_max=7526 Iv_avg_mA=17 Iv_min=-1964 Iv_max=4485 pairs=2121"
+  },
+  {
+    "t_s": 7.4460685999993075,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=10 Iu_min=-2458 Iu_max=4291 Iv_avg_mA=20 Iv_min=-1844 Iv_max=4164 pairs=2120"
+  },
+  {
+    "t_s": 7.551940800000011,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-2278 Iu_max=5253 Iv_avg_mA=13 Iv_min=-2345 Iv_max=4124 pairs=2121"
+  },
+  {
+    "t_s": 7.658027599999514,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-3239 Iu_max=6925 Iv_avg_mA=14 Iv_min=-2845 Iv_max=4845 pairs=2120"
+  },
+  {
+    "t_s": 7.7638993999999,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-2889 Iu_max=2839 Iv_avg_mA=18 Iv_min=-2795 Iv_max=2772 pairs=2121"
+  },
+  {
+    "t_s": 7.869971199999782,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-3069 Iu_max=5533 Iv_avg_mA=16 Iv_min=-3106 Iv_max=3684 pairs=2120"
+  },
+  {
+    "t_s": 7.975968400000056,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-4371 Iu_max=2769 Iv_avg_mA=12 Iv_min=-4178 Iv_max=1681 pairs=2121"
+  },
+  {
+    "t_s": 8.081934699999692,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2648 Iu_max=2459 Iv_avg_mA=12 Iv_min=-2285 Iv_max=1350 pairs=2120"
+  },
+  {
+    "t_s": 8.188017599999512,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-2138 Iu_max=4432 Iv_avg_mA=11 Iv_min=-2465 Iv_max=4014 pairs=2121"
+  },
+  {
+    "t_s": 8.293877399999474,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2218 Iu_max=2709 Iv_avg_mA=14 Iv_min=-2365 Iv_max=3133 pairs=2120"
+  },
+  {
+    "t_s": 8.39994729999944,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-2448 Iu_max=6655 Iv_avg_mA=13 Iv_min=-2074 Iv_max=5116 pairs=2121"
+  },
+  {
+    "t_s": 8.505970799999886,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-4131 Iu_max=5844 Iv_avg_mA=10 Iv_min=-3717 Iv_max=3854 pairs=2120"
+  },
+  {
+    "t_s": 8.612004199999319,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2168 Iu_max=6976 Iv_avg_mA=16 Iv_min=-1563 Iv_max=4084 pairs=2121"
+  },
+  {
+    "t_s": 8.717936399999417,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-3009 Iu_max=1637 Iv_avg_mA=10 Iv_min=-2845 Iv_max=1851 pairs=2120"
+  },
+  {
+    "t_s": 8.823966799999653,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-4702 Iu_max=1747 Iv_avg_mA=9 Iv_min=-3446 Iv_max=1811 pairs=2121"
+  },
+  {
+    "t_s": 8.930023500000061,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2769 Iu_max=5734 Iv_avg_mA=16 Iv_min=-2625 Iv_max=3964 pairs=2120"
+  },
+  {
+    "t_s": 9.03592799999933,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-4231 Iu_max=3540 Iv_avg_mA=12 Iv_min=-3827 Iv_max=1791 pairs=2121"
+  },
+  {
+    "t_s": 9.141978699999527,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-2919 Iu_max=4211 Iv_avg_mA=14 Iv_min=-1563 Iv_max=4004 pairs=2120"
+  },
+  {
+    "t_s": 9.248037599999407,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-4451 Iu_max=4131 Iv_avg_mA=11 Iv_min=-3777 Iv_max=3383 pairs=2121"
+  },
+  {
+    "t_s": 9.35397439999997,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-2989 Iu_max=1988 Iv_avg_mA=14 Iv_min=-2755 Iv_max=1220 pairs=2120"
+  },
+  {
+    "t_s": 9.46009099999992,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-2138 Iu_max=1487 Iv_avg_mA=13 Iv_min=-1834 Iv_max=1691 pairs=2121"
+  },
+  {
+    "t_s": 9.565931199999795,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-3560 Iu_max=3300 Iv_avg_mA=11 Iv_min=-2996 Iv_max=2281 pairs=2120"
+  },
+  {
+    "t_s": 9.671971400000075,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-1767 Iu_max=4782 Iv_avg_mA=16 Iv_min=-1463 Iv_max=3463 pairs=2121"
+  },
+  {
+    "t_s": 9.778073499999664,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3700 Iu_max=3250 Iv_avg_mA=12 Iv_min=-3506 Iv_max=3483 pairs=2120"
+  },
+  {
+    "t_s": 9.883931099999245,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3019 Iu_max=2489 Iv_avg_mA=12 Iv_min=-2705 Iv_max=2291 pairs=2121"
+  },
+  {
+    "t_s": 9.990088999999898,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-3510 Iu_max=6124 Iv_avg_mA=13 Iv_min=-2455 Iv_max=5076 pairs=2120"
+  },
+  {
+    "t_s": 10.095898300000044,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-2298 Iu_max=3600 Iv_avg_mA=14 Iv_min=-1353 Iv_max=2692 pairs=2121"
+  },
+  {
+    "t_s": 10.2019451999995,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-1737 Iu_max=4121 Iv_avg_mA=13 Iv_min=-2094 Iv_max=2432 pairs=2120"
+  },
+  {
+    "t_s": 10.308007199999338,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3760 Iu_max=5433 Iv_avg_mA=10 Iv_min=-3577 Iv_max=4565 pairs=2121"
+  },
+  {
+    "t_s": 10.41405289999966,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3430 Iu_max=5173 Iv_avg_mA=10 Iv_min=-3236 Iv_max=4124 pairs=2120"
+  },
+  {
+    "t_s": 10.519970899999862,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-4201 Iu_max=3961 Iv_avg_mA=10 Iv_min=-3777 Iv_max=3273 pairs=2121"
+  },
+  {
+    "t_s": 10.626018799999656,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3209 Iu_max=1988 Iv_avg_mA=13 Iv_min=-3246 Iv_max=2091 pairs=2121"
+  },
+  {
+    "t_s": 10.731922399999348,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3790 Iu_max=8067 Iv_avg_mA=10 Iv_min=-3737 Iv_max=5196 pairs=2120"
+  },
+  {
+    "t_s": 10.83801609999955,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-4782 Iu_max=3450 Iv_avg_mA=15 Iv_min=-2525 Iv_max=3273 pairs=2121"
+  },
+  {
+    "t_s": 10.944046099999468,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-2678 Iu_max=7897 Iv_avg_mA=18 Iv_min=-2495 Iv_max=5326 pairs=2120"
+  },
+  {
+    "t_s": 11.049959899999521,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-1687 Iu_max=2779 Iv_avg_mA=21 Iv_min=-1083 Iv_max=2322 pairs=2121"
+  },
+  {
+    "t_s": 11.156090200000108,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-4481 Iu_max=2058 Iv_avg_mA=10 Iv_min=-3737 Iv_max=1520 pairs=2120"
+  },
+  {
+    "t_s": 11.261935699999412,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-2879 Iu_max=1687 Iv_avg_mA=8 Iv_min=-2765 Iv_max=1230 pairs=2121"
+  },
+  {
+    "t_s": 11.36798379999982,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-3189 Iu_max=3220 Iv_avg_mA=16 Iv_min=-2575 Iv_max=3073 pairs=2120"
+  },
+  {
+    "t_s": 11.474070899999788,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2208 Iu_max=3931 Iv_avg_mA=14 Iv_min=-1914 Iv_max=1310 pairs=2121"
+  },
+  {
+    "t_s": 11.579936899999666,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-3299 Iu_max=2569 Iv_avg_mA=8 Iv_min=-3296 Iv_max=2111 pairs=2120"
+  },
+  {
+    "t_s": 11.685978699999396,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-1737 Iu_max=2539 Iv_avg_mA=14 Iv_min=-1343 Iv_max=1811 pairs=2121"
+  },
+  {
+    "t_s": 11.792009199999484,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-2358 Iu_max=3400 Iv_avg_mA=12 Iv_min=-2575 Iv_max=2512 pairs=2120"
+  },
+  {
+    "t_s": 11.89804389999972,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3520 Iu_max=4372 Iv_avg_mA=13 Iv_min=-3286 Iv_max=4124 pairs=2121"
+  },
+  {
+    "t_s": 12.003916499999832,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-1447 Iu_max=3330 Iv_avg_mA=16 Iv_min=-1173 Iv_max=1831 pairs=2120"
+  },
+  {
+    "t_s": 12.109967999999753,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-2338 Iu_max=2138 Iv_avg_mA=15 Iv_min=-2665 Iv_max=1791 pairs=2121"
+  },
+  {
+    "t_s": 12.216017699999611,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-4882 Iu_max=2919 Iv_avg_mA=17 Iv_min=-4168 Iv_max=1911 pairs=2120"
+  },
+  {
+    "t_s": 12.322089100000085,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-4311 Iu_max=8227 Iv_avg_mA=13 Iv_min=-2235 Iv_max=5607 pairs=2121"
+  },
+  {
+    "t_s": 12.42802759999995,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-2037 Iu_max=6745 Iv_avg_mA=19 Iv_min=-1413 Iv_max=5376 pairs=2120"
+  },
+  {
+    "t_s": 12.534043999999994,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-1797 Iu_max=6375 Iv_avg_mA=13 Iv_min=-2495 Iv_max=5036 pairs=2121"
+  },
+  {
+    "t_s": 12.640123299999686,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-3019 Iu_max=3049 Iv_avg_mA=13 Iv_min=-1744 Iv_max=2241 pairs=2120"
+  },
+  {
+    "t_s": 12.745957899999667,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-4461 Iu_max=4291 Iv_avg_mA=8 Iv_min=-3967 Iv_max=4174 pairs=2121"
+  },
+  {
+    "t_s": 12.851992500000051,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-1777 Iu_max=7657 Iv_avg_mA=13 Iv_min=-1814 Iv_max=4685 pairs=2120"
+  },
+  {
+    "t_s": 12.95802459999959,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-3740 Iu_max=1868 Iv_avg_mA=12 Iv_min=-2986 Iv_max=1871 pairs=2121"
+  },
+  {
+    "t_s": 13.064082399999279,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=10 Iu_min=-1547 Iu_max=4692 Iv_avg_mA=19 Iv_min=-1213 Iv_max=3834 pairs=2120"
+  },
+  {
+    "t_s": 13.17010609999943,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-4 Iu_min=-1827 Iu_max=4261 Iv_avg_mA=12 Iv_min=-2315 Iv_max=3934 pairs=2121"
+  },
+  {
+    "t_s": 13.275963399999455,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3560 Iu_max=1647 Iv_avg_mA=16 Iv_min=-2485 Iv_max=1210 pairs=2120"
+  },
+  {
+    "t_s": 13.382023899999695,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-5 Iu_min=-3259 Iu_max=4131 Iv_avg_mA=13 Iv_min=-1373 Iv_max=3854 pairs=2121"
+  },
+  {
+    "t_s": 13.488058399999318,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-1 Iu_min=-1587 Iu_max=3500 Iv_avg_mA=9 Iv_min=-2655 Iv_max=1140 pairs=2120"
+  },
+  {
+    "t_s": 13.594152499999836,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-3009 Iu_max=4612 Iv_avg_mA=12 Iv_min=-2926 Iv_max=4435 pairs=2121"
+  },
+  {
+    "t_s": 13.699961299999813,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-8 Iu_min=-3159 Iu_max=1838 Iv_avg_mA=5 Iv_min=-2946 Iv_max=1170 pairs=2120"
+  },
+  {
+    "t_s": 13.806054299999232,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-1827 Iu_max=5383 Iv_avg_mA=14 Iv_min=-2555 Iv_max=4445 pairs=2121"
+  },
+  {
+    "t_s": 13.912033799999335,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-4631 Iu_max=4051 Iv_avg_mA=10 Iv_min=-3917 Iv_max=3724 pairs=2120"
+  },
+  {
+    "t_s": 14.018126299999494,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-1687 Iu_max=3440 Iv_avg_mA=11 Iv_min=-1694 Iv_max=3333 pairs=2121"
+  },
+  {
+    "t_s": 14.123962499999834,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-1396 Iu_max=3330 Iv_avg_mA=14 Iv_min=-1914 Iv_max=1570 pairs=2120"
+  },
+  {
+    "t_s": 14.229985299999498,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-1316 Iu_max=2398 Iv_avg_mA=15 Iv_min=-1083 Iv_max=1270 pairs=2121"
+  },
+  {
+    "t_s": 14.336025499999778,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-3800 Iu_max=5023 Iv_avg_mA=13 Iv_min=-3677 Iv_max=3453 pairs=2120"
+  },
+  {
+    "t_s": 14.442067699999825,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-4 Iu_min=-4281 Iu_max=1848 Iv_avg_mA=6 Iv_min=-4168 Iv_max=1090 pairs=2121"
+  },
+  {
+    "t_s": 14.548107999999957,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2769 Iu_max=3610 Iv_avg_mA=15 Iv_min=-2595 Iv_max=2892 pairs=2120"
+  },
+  {
+    "t_s": 14.653953000000001,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-4291 Iu_max=2829 Iv_avg_mA=12 Iv_min=-3346 Iv_max=2502 pairs=2121"
+  },
+  {
+    "t_s": 14.759957100000065,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-3870 Iu_max=5844 Iv_avg_mA=14 Iv_min=-1714 Iv_max=4795 pairs=2120"
+  },
+  {
+    "t_s": 14.866022499999417,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-4 Iu_min=-2718 Iu_max=1978 Iv_avg_mA=10 Iv_min=-1634 Iv_max=1881 pairs=2121"
+  },
+  {
+    "t_s": 14.972055799999907,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=16 Iu_min=-1617 Iu_max=7977 Iv_avg_mA=24 Iv_min=-1574 Iv_max=5166 pairs=2120"
+  },
+  {
+    "t_s": 15.078132099999493,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=9 Iu_min=-2118 Iu_max=3540 Iv_avg_mA=22 Iv_min=-2044 Iv_max=3363 pairs=2121"
+  },
+  {
+    "t_s": 15.183966099999452,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-3690 Iu_max=3340 Iv_avg_mA=12 Iv_min=-3116 Iv_max=1971 pairs=2120"
+  },
+  {
+    "t_s": 15.290172199999688,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2348 Iu_max=4542 Iv_avg_mA=12 Iv_min=-2124 Iv_max=4214 pairs=2121"
+  },
+  {
+    "t_s": 15.396110799999406,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=8 Iu_min=-2037 Iu_max=5463 Iv_avg_mA=19 Iv_min=-1734 Iv_max=3453 pairs=2120"
+  },
+  {
+    "t_s": 15.502033699999629,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-7 Iu_min=-4281 Iu_max=1086 Iv_avg_mA=5 Iv_min=-4057 Iv_max=839 pairs=2121"
+  },
+  {
+    "t_s": 15.608032600000115,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-3600 Iu_max=1918 Iv_avg_mA=14 Iv_min=-3416 Iv_max=1610 pairs=2120"
+  },
+  {
+    "t_s": 15.71408319999955,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-1767 Iu_max=2659 Iv_avg_mA=10 Iv_min=-1323 Iv_max=2922 pairs=2121"
+  },
+  {
+    "t_s": 15.820029900000009,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-2588 Iu_max=4782 Iv_avg_mA=11 Iv_min=-2425 Iv_max=4214 pairs=2120"
+  },
+  {
+    "t_s": 15.92604510000001,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=1 Iu_min=-3880 Iu_max=2979 Iv_avg_mA=12 Iv_min=-3767 Iv_max=2802 pairs=2121"
+  },
+  {
+    "t_s": 16.03210820000004,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=7 Iu_min=-3079 Iu_max=2859 Iv_avg_mA=19 Iv_min=-2845 Iv_max=2512 pairs=2120"
+  },
+  {
+    "t_s": 16.138007300000027,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-3910 Iu_max=5012 Iv_avg_mA=9 Iv_min=-3356 Iv_max=3453 pairs=2121"
+  },
+  {
+    "t_s": 16.244113499999912,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=6 Iu_min=-2148 Iu_max=3771 Iv_avg_mA=17 Iv_min=-2154 Iv_max=3523 pairs=2120"
+  },
+  {
+    "t_s": 16.349971699999514,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-4 Iu_min=-2839 Iu_max=3290 Iv_avg_mA=8 Iv_min=-2054 Iv_max=1610 pairs=2121"
+  },
+  {
+    "t_s": 16.45616019999943,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-2 Iu_min=-4672 Iu_max=4922 Iv_avg_mA=12 Iv_min=-4057 Iv_max=4285 pairs=2120"
+  },
+  {
+    "t_s": 16.562108299999636,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-2538 Iu_max=4522 Iv_avg_mA=16 Iv_min=-1483 Iv_max=3413 pairs=2121"
+  },
+  {
+    "t_s": 16.66803919999984,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2548 Iu_max=5483 Iv_avg_mA=11 Iv_min=-2154 Iv_max=3694 pairs=2120"
+  },
+  {
+    "t_s": 16.774106999999276,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-6 Iu_min=-4712 Iu_max=1557 Iv_avg_mA=8 Iv_min=-4117 Iv_max=1871 pairs=2121"
+  },
+  {
+    "t_s": 16.88001489999988,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-4661 Iu_max=2519 Iv_avg_mA=16 Iv_min=-4158 Iv_max=3203 pairs=2120"
+  },
+  {
+    "t_s": 16.986135999999533,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-1917 Iu_max=4361 Iv_avg_mA=15 Iv_min=-2154 Iv_max=4034 pairs=2121"
+  },
+  {
+    "t_s": 17.091983899999832,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=3 Iu_min=-3570 Iu_max=4932 Iv_avg_mA=10 Iv_min=-3216 Iv_max=3233 pairs=2120"
+  },
+  {
+    "t_s": 17.198048799999924,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-1747 Iu_max=4402 Iv_avg_mA=16 Iv_min=-1944 Iv_max=4234 pairs=2121"
+  },
+  {
+    "t_s": 17.304163299999345,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-2318 Iu_max=1948 Iv_avg_mA=12 Iv_min=-1704 Iv_max=1260 pairs=2120"
+  },
+  {
+    "t_s": 17.410038299999542,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-4922 Iu_max=1637 Iv_avg_mA=13 Iv_min=-2605 Iv_max=1080 pairs=2121"
+  },
+  {
+    "t_s": 17.516201499999625,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=0 Iu_min=-3680 Iu_max=2378 Iv_avg_mA=12 Iv_min=-2535 Iv_max=2532 pairs=2120"
+  },
+  {
+    "t_s": 17.6220102999996,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-3590 Iu_max=3100 Iv_avg_mA=8 Iv_min=-3517 Iv_max=3453 pairs=2121"
+  },
+  {
+    "t_s": 17.728081799999927,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=-3 Iu_min=-2568 Iu_max=2719 Iv_avg_mA=9 Iv_min=-2565 Iv_max=1630 pairs=2120"
+  },
+  {
+    "t_s": 17.834006499999305,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=2 Iu_min=-2418 Iu_max=5884 Iv_avg_mA=14 Iv_min=-2695 Iv_max=4285 pairs=2121"
+  },
+  {
+    "t_s": 17.94012870000006,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=4 Iu_min=-5112 Iu_max=7897 Iv_avg_mA=14 Iv_min=-3096 Iv_max=5086 pairs=2120"
+  },
+  {
+    "t_s": 18.045981299999767,
+    "line": "req=0 en=0 cal=1 hall=0 dir=0 dt_us=0 edges=0 fe_mHz=0 Iu_avg_mA=5 Iu_min=-3970 Iu_max=3490 Iv_avg_mA=16 Iv_min=-2946 Iv_max=2602 pairs=2121"
+  }
+]
