@@ -94,6 +94,11 @@ volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
 volatile int8_t hall_direction = 0;    // 最近一次边沿：+1 正向，-1 反向，0 未确定
 volatile uint32_t hall_period_us = 0; // 两次捕获的间隔；TIM5 每计数一次为 1 us
 volatile uint32_t hall_edge_count = 0;
+/* 仅供串口观察：每次打印取走并清空一个统计窗口。 */
+static volatile uint32_t monitor_samples = 0;
+static volatile float monitor_u_sum = 0.0f, monitor_v_sum = 0.0f;
+static volatile float monitor_u_min = 0.0f, monitor_u_max = 0.0f;
+static volatile float monitor_v_min = 0.0f, monitor_v_max = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -138,12 +143,12 @@ static void Park_Update(float alpha, float beta, float angle)
 /* 只在主循环调用。沿用 USART1 的 921600 波特率，不使用中断内 printf。 */
 static void Monitor_Print(void)
 {
-    static uint32_t last_ms = 0, last_pairs = 0;
-    char line[192];
+    static uint32_t last_ms = 0;
+    char line[256];
     uint32_t now = HAL_GetTick(), primask, period, edges, pairs;
     uint8_t request, enabled, calibrated, state;
     int8_t direction;
-    float iu, iv;
+    float iu, iv, u_min, u_max, v_min, v_max;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -162,22 +167,42 @@ static void Monitor_Print(void)
     direction = hall_direction;
     period = hall_period_us;
     edges = hall_edge_count;
-    pairs = clarke_count;
-    iu = current_u;
-    iv = current_v;
+    pairs = monitor_samples;
+    iu = monitor_u_sum;
+    iv = monitor_v_sum;
+    u_min = monitor_u_min;
+    u_max = monitor_u_max;
+    v_min = monitor_v_min;
+    v_max = monitor_v_max;
+    monitor_samples = 0;
+    monitor_u_sum = 0.0f;
+    monitor_v_sum = 0.0f;
     __set_PRIMASK(primask);
 
-    /* 电流打印为 mA，避免引入浮点 printf。pairs 是两行之间处理的电流对数。
+    if (pairs != 0U)
+    {
+        iu /= (float)pairs;
+        iv /= (float)pairs;
+    }
+    else
+    {
+        /* 未校准或没有新采样时，pairs=0；零值不表示实测电流为零。 */
+        iu = iv = u_min = u_max = v_min = v_max = 0.0f;
+    }
+
+    /* avg/min/max 均为窗口统计值，单位 mA；pairs 为参与统计的电流对数。
      * 霍尔数据是最近一次捕获值；停转后可能不变，不代表仍在转。
      */
     length = snprintf(line, sizeof(line),
         "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu "
-        "Iu_mA=%ld Iv_mA=%ld pairs=%lu\r\n",
+        "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
+        "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
-        (unsigned long)edges, (long)(iu * 1000.0f), (long)(iv * 1000.0f),
-        (unsigned long)(pairs - last_pairs));
-    last_pairs = pairs;
+        (unsigned long)edges,
+        (long)(iu * 1000.0f), (long)(u_min * 1000.0f), (long)(u_max * 1000.0f),
+        (long)(iv * 1000.0f), (long)(v_min * 1000.0f), (long)(v_max * 1000.0f),
+        (unsigned long)pairs);
 
     if ((length > 0) && (length < (int)sizeof(line)))
     {
@@ -442,6 +467,23 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         Clarke_Update(current_u, current_v);
         /* 顺序执行两个变换；测试角度为 0 时，d=alpha、q=beta。 */
         Park_Update(current_alpha, current_beta, park_angle);
+
+        /* 只累加监控统计；Clarke/Park 仍使用本次瞬时电流。 */
+        if (monitor_samples == 0U)
+        {
+            monitor_u_min = monitor_u_max = current_u;
+            monitor_v_min = monitor_v_max = current_v;
+        }
+        else
+        {
+            if (current_u < monitor_u_min) monitor_u_min = current_u;
+            if (current_u > monitor_u_max) monitor_u_max = current_u;
+            if (current_v < monitor_v_min) monitor_v_min = current_v;
+            if (current_v > monitor_v_max) monitor_v_max = current_v;
+        }
+        monitor_u_sum += current_u;
+        monitor_v_sum += current_v;
+        monitor_samples++;
     }
 }
 
