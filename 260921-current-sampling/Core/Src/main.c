@@ -39,7 +39,7 @@
 #define SIN_60                 0.8660254f // sqrt(3) / 2
 #define COS_60                 0.5f
 #define SQRT_3                 1.7320508f // 根号 3
-#define CURRENT_SAMPLING_ONLY  1  // 零电流采样阶段：禁止启动功率级
+#define PWM_UPDATE_HZ          20000.0f // TIM8 CH4 每个 PWM 周期计算一次
 #define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
 #define ADC_OFFSET_SAMPLES     256U  // 每相零电流偏置的平均次数
 #define ADC_COUNTS_PER_RANGE   4096.0f
@@ -171,13 +171,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   /* 默认关闭功率级，等SVPWM参数准备完成后再启动。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
-#if CURRENT_SAMPLING_ONLY
-  /* 只观察霍尔，不改变 park_angle，也不打开功率级。 */
+  /* 霍尔只观察，不改变 park_angle，不参与开环输出。 */
   if (HAL_TIMEx_HallSensor_Start_IT(&htim5) != HAL_OK)
   {
     Error_Handler();
   }
-  /* 先让 ADC 等待外部触发，再启动 CH4；CH1~3 保持关闭。 */
+  /* 先让 ADC 等待 CH4 触发；校准完成前 MOTOR_EN 始终为低。 */
   if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK)
   {
     Error_Handler();
@@ -186,26 +185,22 @@ int main(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_4) != HAL_OK)
+  /* 启动三相定时器输出，但驱动仍关闭；按键后才允许电机通电。 */
+  if ((HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1) != HAL_OK) ||
+      (HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1) != HAL_OK) ||
+      (HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2) != HAL_OK) ||
+      (HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2) != HAL_OK) ||
+      (HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3) != HAL_OK) ||
+      (HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3) != HAL_OK))
   {
     Error_Handler();
   }
-#endif
-#if !CURRENT_SAMPLING_ONLY
-  __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, 4198);
-  HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
-	
-	HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_1);
-
-HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
-HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_2);
-
-HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
-HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
-
-//	HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
-#endif
+  /* CCR4 沿用 CubeMX 的 4198：硬件触发 ADC，同时进入 PWM 回调。 */
+  __HAL_TIM_CLEAR_FLAG(&htim8, TIM_FLAG_CC4);
+  if (HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -215,11 +210,16 @@ HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-#if !CURRENT_SAMPLING_ONLY
     static uint8_t key_armed = 0;
 
-    /* KEY1：PE0，松开为高，按下为低；硬件已消抖。 */
-    if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
+    /* 校准期间不接受启动，也不记住提前按下的按键。 */
+    if ((adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
+    {
+        motor_request = 0;
+        key_armed = 0;
+    }
+    /* KEY1：PE0。校准后先松开，再按下，才切换启停。 */
+    else if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
     {
         key_armed = 1;
     }
@@ -229,7 +229,6 @@ HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
         key_armed = 0;
         motor_request = !motor_request;
     }
-#endif
 
     HAL_Delay(20); // 按键轮询间隔，不阻止 TIM8 中断
   }
@@ -328,11 +327,12 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-#if CURRENT_SAMPLING_ONLY
     static uint32_t u_samples = 0, v_samples = 0;
     static uint32_t u_sum = 0, v_sum = 0;
 
-    /* 仅在本阶段电机无电流、采样电路供电稳定时，平均值才是零点。 */
+    /* 上电先关闭驱动，电机无电流、采样电路供电稳定时建立零点。
+     * 校准完成后冻结 offset；电机运行时继续采样，不重新平均零点。
+     */
     if (hadc->Instance == ADC1)
     {
         adc_u_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
@@ -387,26 +387,19 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         /* 顺序执行两个变换；测试角度为 0 时，d=alpha、q=beta。 */
         Park_Update(current_alpha, current_beta, park_angle);
     }
-#else
-    (void)hadc;
-#endif
 }
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
-#if CURRENT_SAMPLING_ONLY
-    (void)htim;
-    HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
-    return;
-#else
     if ((htim->Instance == TIM8) &&
         (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4))
     {
         static uint8_t pwm_prepared = 0;
 
-        if (motor_request == 0)
+        if ((motor_request == 0) ||
+            (adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
         {
-            /* 关闭功率级，定时器仍然运行。 */
+            /* 未校准或收到停止请求：关闭驱动，ADC 和霍尔继续运行。 */
             HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
             pwm_prepared = 0;
             theta = 0.0f;
@@ -424,7 +417,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         {
             /* 下一次 CH4 中断，上一组 CCR 已经过更新事件装载。 */
             HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
-            theta += TWO_PI * frequency / 20000.0f;
+            theta += TWO_PI * frequency / PWM_UPDATE_HZ;
         }
 
 			if (theta >= TWO_PI)
@@ -546,7 +539,6 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 			__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3,
 					(uint32_t)(dutyC * __HAL_TIM_GET_AUTORELOAD(&htim8)));
     }
-#endif
 }
 /* USER CODE END 4 */
 
@@ -557,6 +549,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
