@@ -41,6 +41,8 @@
 #define COS_60                 0.5f
 #define SQRT_3                 1.7320508f // 根号 3
 #define PWM_UPDATE_HZ          20000.0f // TIM8 CH4 每个 PWM 周期计算一次
+#define HALL_TIMER_HZ          1000000.0f // TIM5 每计数一次为 1 us
+#define HALL_EDGES_PER_CYCLE   6.0f       // 一圈电角度有 6 个霍尔区间
 #define MONITOR_PERIOD_MS      100U    // 串口每秒打印 10 行
 #define MONITOR_TX_TIMEOUT_MS  5U      // 打印超时就放弃本行，不影响启停逻辑
 #define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
@@ -94,6 +96,7 @@ volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
 volatile int8_t hall_direction = 0;    // 最近一次边沿：+1 正向，-1 反向，0 未确定
 volatile uint32_t hall_period_us = 0; // 两次捕获的间隔；TIM5 每计数一次为 1 us
 volatile uint32_t hall_edge_count = 0;
+volatile float hall_electrical_hz = 0.0f; // 最近有效区间的电频率；仅观察，停转不自动清零
 /* 仅供串口观察：每次打印取走并清空一个统计窗口。 */
 static volatile uint32_t monitor_samples = 0;
 static volatile float monitor_u_sum = 0.0f, monitor_v_sum = 0.0f;
@@ -148,7 +151,7 @@ static void Monitor_Print(void)
     uint32_t now = HAL_GetTick(), primask, period, edges, pairs;
     uint8_t request, enabled, calibrated, state;
     int8_t direction;
-    float iu, iv, u_min, u_max, v_min, v_max;
+    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -167,6 +170,7 @@ static void Monitor_Print(void)
     direction = hall_direction;
     period = hall_period_us;
     edges = hall_edge_count;
+    electrical_hz = hall_electrical_hz;
     pairs = monitor_samples;
     iu = monitor_u_sum;
     iv = monitor_v_sum;
@@ -194,12 +198,12 @@ static void Monitor_Print(void)
      * 霍尔数据是最近一次捕获值；停转后可能不变，不代表仍在转。
      */
     length = snprintf(line, sizeof(line),
-        "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu "
+        "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu fe_mHz=%ld "
         "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
         "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
-        (unsigned long)edges,
+        (unsigned long)edges, (long)(electrical_hz * 1000.0f),
         (long)(iu * 1000.0f), (long)(u_min * 1000.0f), (long)(u_max * 1000.0f),
         (long)(iv * 1000.0f), (long)(v_min * 1000.0f), (long)(v_max * 1000.0f),
         (unsigned long)pairs);
@@ -369,6 +373,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
      */
     static const uint8_t next_state[8] = {0, 3, 6, 2, 5, 1, 4, 0};
     static uint8_t previous_state = 0;
+    static int8_t previous_direction = 0;
     uint32_t captured_us;
 
     if ((htim->Instance != TIM5) ||
@@ -382,10 +387,12 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     hall_edge_count++;
     hall_direction = 0;
     hall_period_us = 0;
+    hall_electrical_hz = 0.0f;
 
     if ((hall_state == 0U) || (hall_state == 7U))
     {
         previous_state = 0; // 120度霍尔的无效状态，不参与方向判断
+        previous_direction = 0;
         return;
     }
 
@@ -401,8 +408,19 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
          */
         if (hall_direction != 0)
             hall_period_us = captured_us;
+
+        /* 连续两次方向一致，才用刚走完的 60 度计算速度。
+         * 启动、换向和异常跳变后的首个区间不用于测速；排除除零。
+         */
+        if ((hall_direction != 0) &&
+            (hall_direction == previous_direction) && (captured_us != 0U))
+        {
+            hall_electrical_hz = (float)hall_direction * HALL_TIMER_HZ /
+                                (HALL_EDGES_PER_CYCLE * (float)captured_us);
+        }
     }
 
+    previous_direction = hall_direction;
     previous_state = hall_state;
 }
 
