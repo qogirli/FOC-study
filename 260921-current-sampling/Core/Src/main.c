@@ -43,6 +43,8 @@
 #define PWM_UPDATE_HZ          20000.0f // TIM8 CH4 每个 PWM 周期计算一次
 #define HALL_TIMER_HZ          1000000.0f // TIM5 每计数一次为 1 us
 #define HALL_EDGES_PER_CYCLE   6.0f       // 一圈电角度有 6 个霍尔区间
+#define HALL_SECTOR_RAD        (TWO_PI / HALL_EDGES_PER_CYCLE)
+#define HALL_STOP_TIMEOUT_MS   1000U     // 学习阶段：1秒没有边沿，测速失效
 #define MONITOR_PERIOD_MS      100U    // 串口每秒打印 10 行
 #define MONITOR_TX_TIMEOUT_MS  5U      // 打印超时就放弃本行，不影响启停逻辑
 #define ADC_SETTLE_SAMPLES     2000U // 20 kHz 下先丢弃约 100 ms 数据
@@ -96,7 +98,11 @@ volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
 volatile int8_t hall_direction = 0;    // 最近一次边沿：+1 正向，-1 反向，0 未确定
 volatile uint32_t hall_period_us = 0; // 两次捕获的间隔；TIM5 每计数一次为 1 us
 volatile uint32_t hall_edge_count = 0;
-volatile float hall_electrical_hz = 0.0f; // 最近有效区间的电频率；仅观察，停转不自动清零
+volatile float hall_electrical_hz = 0.0f; // 有符号电频率；超时清零
+volatile float hall_angle = 0.0f;       // 霍尔相对电角度，rad；零点未对齐磁极
+volatile uint8_t hall_angle_valid = 0;  // 仅表示插值有依据，不代表可直接用于FOC
+static volatile float hall_edge_angle = 0.0f;
+static volatile uint32_t hall_last_edge_ms = 0;
 /* 仅供串口观察：每次打印取走并清空一个统计窗口。 */
 static volatile uint32_t monitor_samples = 0;
 static volatile float monitor_u_sum = 0.0f, monitor_v_sum = 0.0f;
@@ -143,15 +149,52 @@ static void Park_Update(float alpha, float beta, float angle)
     current_q = -alpha * sin_angle + beta * cos_angle;
 }
 
+/* 仅观察：TIM5在霍尔边沿自动清CNT，CNT就是距最近边沿的微秒数。
+ * TIM5和TIM8当前同为抢占优先级0，不会互相打断；不要单独改变其优先级。
+ */
+static void Hall_AngleUpdate(void)
+{
+    uint32_t elapsed_us;
+    float angle;
+
+    elapsed_us = __HAL_TIM_GET_COUNTER(&htim5);
+    /* 硬件已捕获但霍尔回调尚未处理时，不能混用旧边沿角度和新CNT。 */
+    if (__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_CC1) != RESET)
+        return;
+    if ((uint32_t)(HAL_GetTick() - hall_last_edge_ms) >= HALL_STOP_TIMEOUT_MS)
+    {
+        hall_electrical_hz = 0.0f;
+        hall_direction = 0;
+        hall_period_us = 0;
+        hall_angle_valid = 0;
+        return; // 保留最后角度，不再按旧速度转下去
+    }
+    if ((hall_period_us == 0U) || (hall_electrical_hz == 0.0f))
+    {
+        hall_angle_valid = 0;
+        return;
+    }
+
+    hall_angle_valid = elapsed_us < hall_period_us;
+    /* 新边沿迟迟不来时，最多推算一个60度区间，不凭空跨过多个区间。 */
+    if (elapsed_us > hall_period_us)
+        elapsed_us = hall_period_us;
+    angle = hall_edge_angle + TWO_PI * hall_electrical_hz *
+                              ((float)elapsed_us / HALL_TIMER_HZ);
+    if (angle >= TWO_PI) angle -= TWO_PI;
+    if (angle < 0.0f) angle += TWO_PI;
+    hall_angle = angle;
+}
+
 /* 只在主循环调用。沿用 USART1 的 921600 波特率，不使用中断内 printf。 */
 static void Monitor_Print(void)
 {
     static uint32_t last_ms = 0;
-    char line[256];
+    char line[320];
     uint32_t now = HAL_GetTick(), primask, period, edges, pairs;
-    uint8_t request, enabled, calibrated, state;
+    uint8_t request, enabled, calibrated, state, angle_valid;
     int8_t direction;
-    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz;
+    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -171,6 +214,8 @@ static void Monitor_Print(void)
     period = hall_period_us;
     edges = hall_edge_count;
     electrical_hz = hall_electrical_hz;
+    angle = hall_angle;
+    angle_valid = hall_angle_valid;
     pairs = monitor_samples;
     iu = monitor_u_sum;
     iv = monitor_v_sum;
@@ -195,18 +240,19 @@ static void Monitor_Print(void)
     }
 
     /* avg/min/max 均为窗口统计值，单位 mA；pairs 为参与统计的电流对数。
-     * 霍尔数据是最近一次捕获值；停转后可能不变，不代表仍在转。
+     * ha_mdeg为相对电角度的千分之一度；ha_ok=0时不应相信角度插值。
      */
     length = snprintf(line, sizeof(line),
         "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu fe_mHz=%ld "
         "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
-        "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu\r\n",
+        "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu ha_mdeg=%ld ha_ok=%u\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
         (unsigned long)edges, (long)(electrical_hz * 1000.0f),
         (long)(iu * 1000.0f), (long)(u_min * 1000.0f), (long)(u_max * 1000.0f),
         (long)(iv * 1000.0f), (long)(v_min * 1000.0f), (long)(v_max * 1000.0f),
-        (unsigned long)pairs);
+        (unsigned long)pairs, (long)(angle * (360000.0f / TWO_PI)),
+        (unsigned)angle_valid);
 
     if ((length > 0) && (length < (int)sizeof(line)))
     {
@@ -372,6 +418,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
      * 下标是当前霍尔状态，表内值是正向的下一个状态。
      */
     static const uint8_t next_state[8] = {0, 3, 6, 2, 5, 1, 4, 0};
+    /* 学习坐标：状态5占0~60度，1占60~120度，依次类推；不是磁极零点。 */
+    static const uint8_t sector_index[8] = {0, 1, 3, 2, 5, 0, 4, 0};
     static uint8_t previous_state = 0;
     static int8_t previous_direction = 0;
     uint32_t captured_us;
@@ -383,6 +431,13 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     }
 
     captured_us = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    if ((uint32_t)(HAL_GetTick() - hall_last_edge_ms) >= HALL_STOP_TIMEOUT_MS)
+    {
+        previous_state = 0;
+        previous_direction = 0;
+    }
+    hall_last_edge_ms = HAL_GetTick();
+    hall_angle_valid = 0;
     hall_state = (uint8_t)((GPIOH->IDR >> 10U) & 0x07U);
     hall_edge_count++;
     hall_direction = 0;
@@ -420,6 +475,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
         }
     }
 
+    if (hall_direction != 0)
+    {
+        hall_edge_angle = (float)sector_index[hall_state] * HALL_SECTOR_RAD;
+        /* 反转从区间上边界进入，不能照搬正转的下边界角度。 */
+        if (hall_direction < 0) hall_edge_angle += HALL_SECTOR_RAD;
+        if (hall_edge_angle >= TWO_PI) hall_edge_angle -= TWO_PI;
+        hall_angle = hall_edge_angle;
+        hall_angle_valid = hall_electrical_hz != 0.0f;
+    }
     previous_direction = hall_direction;
     previous_state = hall_state;
 }
@@ -511,6 +575,8 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4))
     {
         static uint8_t pwm_prepared = 0;
+
+        Hall_AngleUpdate(); // 即使驱动关闭也观察霍尔，不修改theta或park_angle
 
         if ((motor_request == 0) ||
             (adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
