@@ -149,30 +149,20 @@ static void Park_Update(float alpha, float beta, float angle)
     current_q = -alpha * sin_angle + beta * cos_angle;
 }
 
-/* 霍尔角度更新：每次TIM8 CH4回调调用，约每50us一次；仅供观察。
- * 主线只有一句：当前角度 = 最近边沿的位置 + 估算角速度 × 距边沿的时间。
- * 霍尔回调提供起点和速度；这里补出两个霍尔边沿之间的角度。
- * TIM5在霍尔边沿自动清CNT，CNT就是距最近边沿的微秒数。
- * 这里假设当前区间的速度与刚走完的区间接近；加减速时估算会有误差。
- * 因此还要检查：有没有测速依据、是否等边沿等太久、是否超出一个区间。
- * TIM5和TIM8当前同为抢占优先级0，不会互相打断；不要单独改变其优先级。
- * 不修改theta、park_angle、CCR或电机使能；这不是新的电机控制环。
+/* 每50us估算一次：角度 = 最近边沿位置 + 估算角速度 × 已过时间，仅供观察。
+ * TIM5、TIM8保持相同抢占优先级，避免读到更新了一半的霍尔数据。
  */
 static void Hall_AngleUpdate(void)
 {
-    uint32_t elapsed_us; // elapsed = 已经过的：本区间从最近边沿到现在，走了多少微秒
-    float angle;         // 本次算出的临时角度，单位rad，最后存入hall_angle
+    uint32_t elapsed_us; // 距最近边沿已过的时间，us
+    float angle;         // 本次估算角度，rad
 
-    /* CNT是正在走的计时器；区别于CCR1保存的“上一段已经走完的时间”。 */
+    /* TIM5在边沿清CNT；读取这一区间已过的时间。 */
     elapsed_us = __HAL_TIM_GET_COUNTER(&htim5);
-    /* 同步检查，不是角度公式：CC1置位表示有一次捕获等待处理。
-     * 此时硬件可能已清CNT，但霍尔回调还没更新起点；跳过这一次角度更新，
-     * 等霍尔回调处理后再算，避免把旧起点和新计时拼在一起。 */
+    /* 新边沿还没处理完，等起点更新后再算。 */
     if (__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_CC1) != RESET)
         return;
-    /* 毫秒级超时：系统当前时刻 - 最近捕获时刻 >= 1000ms。
-     * 这里只能判断“太久没收到边沿”，不能区分停转、极低速或霍尔异常。
-     * 清除旧测速依据；不是关闭电机，也不是测量到了精确的零转速。 */
+    /* 1秒没边沿：清除旧速度，暂停角度推算。 */
     if ((uint32_t)(HAL_GetTick() - hall_last_edge_ms) >= HALL_STOP_TIMEOUT_MS)
     {
         hall_electrical_hz = 0.0f;
@@ -181,31 +171,22 @@ static void Hall_AngleUpdate(void)
         hall_angle_valid = 0;
         return; // 保留最后角度，不再按旧速度转下去
     }
-    /* 刚启动、方向未确认或出现异常跳变时，暂时没有可用速度，不能往前猜。 */
+    /* 没有有效速度，暂时无法推算。 */
     if ((hall_period_us == 0U) || (hall_electrical_hz == 0.0f))
     {
         hall_angle_valid = 0;
         return;
     }
 
-    /* 下面两次比较，问的是同一件事，但用途不同：
-     * elapsed_us：这一段“目前已经过去多久”；hall_period_us：上一段“总共用了多久”。
-     * 例如上一段10000us，这一段已过5000us，就先估计走了半段，即30度。
-     * 第一次比较只给出标志：还没用完预计时间则为1，否则为0。
-     * 到预计边界却没有新边沿时，先标记不可靠，不表示电机一定停了。 */
+    /* 已过时间达到上一段用时，却没有新边沿：标记估算无效。 */
     hall_angle_valid = elapsed_us < hall_period_us;
-    /* 第二次比较限制计算值：超过10000us时，只按10000us计算。
-     * 因而最多推算60度，不让停转或漏边沿后，角度仍一直转下去。
-     * 等于时无需改数值，但上面的有效标志已经为0。 */
+    /* 限制计算时间，最多推算一个60度区间。 */
     if (elapsed_us > hall_period_us)
         elapsed_us = hall_period_us;
-    /* 电频率(圈/秒) × TWO_PI = 角速度(rad/秒)。
-     * elapsed_us / HALL_TIMER_HZ把计数换成秒；两者相乘就是从边沿又走的角度。
-     * hall_electrical_hz带方向：正转加角度，反转减角度。 */
+    /* 频率换成rad/s，时间换成秒；带符号速度决定加减方向。 */
     angle = hall_edge_angle + TWO_PI * hall_electrical_hz *
                               ((float)elapsed_us / HALL_TIMER_HZ);
-    /* 回绕到一圈内：例如370度记作10度，-10度记作350度；此处用的是弧度。
-     * 起点已在一圈内，且最多推算60度，所以加/减一次TWO_PI就够了。 */
+    /* 角度回绕到0~2π。 */
     if (angle >= TWO_PI) angle -= TWO_PI;
     if (angle < 0.0f) angle += TWO_PI;
     hall_angle = angle;
@@ -443,27 +424,22 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
      * 下标是当前霍尔状态，表内值是正向的下一个状态。
      */
     static const uint8_t next_state[8] = {0, 3, 6, 2, 5, 1, 4, 0};
-    /* 下标是霍尔状态，表内是区间编号：
-     * 状态5/1/3/2/6/4分别对应区间0/1/2/3/4/5。
-     * 区间编号乘60度，得到这个区间的下边界。
-     * 学习坐标：状态5占0~60度，1占60~120度，依次类推；不是磁极零点。
-     * 0和7的表值只是占位，这两种状态会在下面提前返回，不拿来计算角度。 */
+    /* 状态5/1/3/2/6/4对应区间0/1/2/3/4/5；编号×60度为下边界，零点未对齐磁极。 */
     static const uint8_t sector_index[8] = {0, 1, 3, 2, 5, 0, 4, 0};
-    static uint8_t previous_state = 0;    // 上一次捕获读到的霍尔状态；static使它在回调退出后保留
-    static int8_t previous_direction = 0; // 上一次确认的方向；用于避免刚换向就套用旧速度
-    uint32_t captured_us;                // captured = 已捕获的：刚结束的两个边沿之间隔了多少微秒
+    static uint8_t previous_state = 0;    // 上一次霍尔状态
+    static int8_t previous_direction = 0; // 上一次方向
+    uint32_t captured_us;                // 刚走完一个区间的用时，us
 
-    /* HAL共用这个回调名；只接收TIM5通道1的霍尔捕获，不处理其他定时器。 */
+    /* 只处理TIM5通道1的霍尔捕获。 */
     if ((htim->Instance != TIM5) ||
         (htim->Channel != HAL_TIM_ACTIVE_CHANNEL_1))
     {
         return;
     }
 
-    /* 边沿到来时，硬件先把间隔保存在CCR1，再重新开始CNT计时。
-     * CCR1用于算“上一段的速度”；CNT用于算“新的一段已经走了多久”。 */
+    /* CCR1保存刚结束的区间用时；CNT已开始为下一区间计时。 */
     captured_us = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-    /* 太久没有边沿后重新来信号，先忘记旧状态和旧方向，从头建立测速依据。 */
+    /* 超时后重新捕获，先丢弃旧的方向和状态。 */
     if ((uint32_t)(HAL_GetTick() - hall_last_edge_ms) >= HALL_STOP_TIMEOUT_MS)
     {
         previous_state = 0;
@@ -484,8 +460,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
         return;
     }
 
-    /* 有上一次状态才能判断转向：沿next_state顺序是正转，反过来是反转。
-     * 重复状态或跨区间跳变均不符合这两个判断，方向保持0，暂不估算速度。 */
+    /* 用前后状态判断方向；重复或跳区间时，方向保持0。 */
     if (previous_state != 0U)
     {
         if (next_state[previous_state] == hall_state)
@@ -505,8 +480,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
         if ((hall_direction != 0) &&
             (hall_direction == previous_direction) && (captured_us != 0U))
         {
-            /* 一段用captured_us个计数，六段是一圈电角度：
-             * 每秒计数频率 / 每圈计数数目 = 电频率，再乘+1或-1表示方向。 */
+            /* 六个区间是一圈电角度，方向决定频率正负。 */
             hall_electrical_hz = (float)hall_direction * HALL_TIMER_HZ /
                                 (HALL_EDGES_PER_CYCLE * (float)captured_us);
         }
@@ -514,14 +488,13 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
     if (hall_direction != 0)
     {
-        /* 边沿就是新的位置依据，每次到来都用它校正之前推算的角度。 */
+        /* 新边沿校正角度起点。 */
         hall_edge_angle = (float)sector_index[hall_state] * HALL_SECTOR_RAD;
-        /* 例如状态1对应60~120度：正转进入它时在60度，反转进入时在120度。
-         * 所以反转要在下边界上再加60度；随后插值时，负速度会使角度减小。 */
+        /* 正转从区间下边界进入，反转从上边界进入。 */
         if (hall_direction < 0) hall_edge_angle += HALL_SECTOR_RAD;
         if (hall_edge_angle >= TWO_PI) hall_edge_angle -= TWO_PI;
         hall_angle = hall_edge_angle;
-        hall_angle_valid = hall_electrical_hz != 0.0f; // 有边沿位置还不够，速度也有依据才允许插值
+        hall_angle_valid = hall_electrical_hz != 0.0f; // 有速度依据才允许插值
     }
     previous_direction = hall_direction;
     previous_state = hall_state;
