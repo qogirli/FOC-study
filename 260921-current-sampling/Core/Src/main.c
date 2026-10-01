@@ -44,6 +44,8 @@
 #define HALL_TIMER_HZ          1000000.0f // 霍尔计时频率，1计数=1us
 #define HALL_EDGES_PER_CYCLE   6.0f       // 每电角度圈6个区间
 #define HALL_SECTOR_RAD        (TWO_PI / HALL_EDGES_PER_CYCLE)
+#define HALL_PHASE_SHIFT_DEG   120.0f // 硬石655参考偏移，实际接线待验证
+#define HALL_PHASE_SHIFT_RAD   (HALL_PHASE_SHIFT_DEG * TWO_PI / 360.0f)
 #define HALL_STOP_TIMEOUT_MS   1000U     // 无边沿超时，ms
 #define MONITOR_PERIOD_MS      100U    // 打印间隔，ms
 #define MONITOR_TX_TIMEOUT_MS  5U      // 串口发送超时，ms
@@ -92,7 +94,8 @@ volatile float current_alpha = 0.0f;
 volatile float current_beta = 0.0f;
 volatile float current_d = 0.0f; // dq电流，A；仅观察
 volatile float current_q = 0.0f;
-volatile float park_angle = 0.0f; // Park测试角度，rad；尚未接入霍尔
+volatile float park_angle = 0.0f; // 霍尔角度加零点偏移，rad
+volatile uint8_t park_angle_valid = 0; // 本次dq计算是否有有效角度
 volatile uint32_t clarke_count = 0; // 电流变换次数
 volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
 volatile int8_t hall_direction = 0;    // +1正转，-1反转，0未知
@@ -108,6 +111,8 @@ static volatile uint32_t monitor_samples = 0;
 static volatile float monitor_u_sum = 0.0f, monitor_v_sum = 0.0f;
 static volatile float monitor_u_min = 0.0f, monitor_u_max = 0.0f;
 static volatile float monitor_v_min = 0.0f, monitor_v_max = 0.0f;
+static volatile uint32_t monitor_dq_samples = 0;
+static volatile float monitor_d_sum = 0.0f, monitor_q_sum = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -146,7 +151,7 @@ static void Park_Update(float alpha, float beta, float angle)
     current_q = -alpha * sin_angle + beta * cos_angle;
 }
 
-/* 每50us估算一次：角度 = 最近边沿位置 + 估算角速度 × 已过时间，仅供观察。
+/* 角度 = 最近边沿位置 + 估算角速度 × 已过时间，仅供观察。
  * TIM5、TIM8保持相同抢占优先级，避免读到更新了一半的霍尔数据。
  */
 static void Hall_AngleUpdate(void)
@@ -158,7 +163,10 @@ static void Hall_AngleUpdate(void)
     elapsed_us = __HAL_TIM_GET_COUNTER(&htim5);
     /* 新边沿还没处理完，等起点更新后再算。 */
     if (__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_CC1) != RESET)
+    {
+        hall_angle_valid = 0;
         return;
+    }
     /* 1秒没边沿：清除旧速度，暂停角度推算。 */
     if ((uint32_t)(HAL_GetTick() - hall_last_edge_ms) >= HALL_STOP_TIMEOUT_MS)
     {
@@ -193,11 +201,11 @@ static void Hall_AngleUpdate(void)
 static void Monitor_Print(void)
 {
     static uint32_t last_ms = 0;
-    char line[320];
-    uint32_t now = HAL_GetTick(), primask, period, edges, pairs;
-    uint8_t request, enabled, calibrated, state, angle_valid;
+    char line[384];
+    uint32_t now = HAL_GetTick(), primask, period, edges, pairs, dq_pairs;
+    uint8_t request, enabled, calibrated, state, angle_valid, park_valid;
     int8_t direction;
-    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle;
+    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle, id, iq, p_angle;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -217,6 +225,11 @@ static void Monitor_Print(void)
     electrical_hz = hall_electrical_hz;
     angle = hall_angle;
     angle_valid = hall_angle_valid;
+    p_angle = park_angle;
+    park_valid = park_angle_valid;
+    dq_pairs = monitor_dq_samples;
+    id = monitor_d_sum;
+    iq = monitor_q_sum;
     pairs = monitor_samples;
     iu = monitor_u_sum;
     iv = monitor_v_sum;
@@ -227,6 +240,8 @@ static void Monitor_Print(void)
     monitor_samples = 0;
     monitor_u_sum = 0.0f;
     monitor_v_sum = 0.0f;
+    monitor_dq_samples = 0;
+    monitor_d_sum = monitor_q_sum = 0.0f;
     __set_PRIMASK(primask);
 
     if (pairs != 0U)
@@ -240,18 +255,31 @@ static void Monitor_Print(void)
         iu = iv = u_min = u_max = v_min = v_max = 0.0f;
     }
 
-    /* 电流用mA、角度用千分之一度；pairs为样本数，ha_ok为角度有效标志。 */
+    if (dq_pairs != 0U)
+    {
+        id /= (float)dq_pairs;
+        iq /= (float)dq_pairs;
+    }
+    else
+    {
+        id = iq = 0.0f; // 无有效dq采样时打印占位值
+    }
+
+    /* 电流用mA、角度用千分之一度；dq_pairs只统计角度有效的采样。 */
     length = snprintf(line, sizeof(line),
         "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu fe_mHz=%ld "
         "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
-        "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu ha_mdeg=%ld ha_ok=%u\r\n",
+        "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu ha_mdeg=%ld ha_ok=%u "
+        "pa_mdeg=%ld pa_ok=%u Id_avg_mA=%ld Iq_avg_mA=%ld dq_pairs=%lu\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
         (unsigned long)edges, (long)(electrical_hz * 1000.0f),
         (long)(iu * 1000.0f), (long)(u_min * 1000.0f), (long)(u_max * 1000.0f),
         (long)(iv * 1000.0f), (long)(v_min * 1000.0f), (long)(v_max * 1000.0f),
         (unsigned long)pairs, (long)(angle * (360000.0f / TWO_PI)),
-        (unsigned)angle_valid);
+        (unsigned)angle_valid, (long)(p_angle * (360000.0f / TWO_PI)),
+        (unsigned)park_valid, (long)(id * 1000.0f), (long)(iq * 1000.0f),
+        (unsigned long)dq_pairs);
 
     if ((length > 0) && (length < (int)sizeof(line)))
     {
@@ -527,8 +555,19 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         current_u = ADC_ToCurrent(adc_u_raw, adc_u_offset);
         current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
         Clarke_Update(current_u, current_v);
-        /* 测试角度为0时，d=alpha、q=beta。 */
-        Park_Update(current_alpha, current_beta, park_angle);
+        Hall_AngleUpdate();
+        park_angle_valid = hall_angle_valid;
+        if (park_angle_valid != 0U)
+        {
+            /* 霍尔相对角度加参考偏移，作为Park的旋转角度。 */
+            park_angle = hall_angle + HALL_PHASE_SHIFT_RAD;
+            if (park_angle >= TWO_PI) park_angle -= TWO_PI;
+            if (park_angle < 0.0f) park_angle += TWO_PI;
+            Park_Update(current_alpha, current_beta, park_angle);
+            monitor_d_sum += current_d;
+            monitor_q_sum += current_q;
+            monitor_dq_samples++;
+        } // 角度无效时保留上次dq值，不计入平均
 
         /* 累加打印统计。 */
         if (monitor_samples == 0U)
