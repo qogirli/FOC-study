@@ -55,6 +55,10 @@
 #define ADC_VREF_V             3.3f   // 标称ADC参考电压，V
 #define CURRENT_SHUNT_OHM      0.02f  // 2024版原理图 R12/R18/R24
 #define CURRENT_AMP_GAIN       (5100.0f / (1200.0f + 68.0f))
+#define CURRENT_PI_KP          0.5f // 计算练习值，V/A；尚未调参
+#define CURRENT_PI_KI          5.0f // V/(A*s)
+#define CURRENT_PI_DT          (1.0f / PWM_UPDATE_HZ) // 采样间隔，s
+#define CURRENT_PI_LIMIT_V     1.0f // 每轴电压指令限幅，V
 
 /* USER CODE END PD */
 
@@ -96,6 +100,10 @@ volatile float current_d = 0.0f; // dq电流，A；仅观察
 volatile float current_q = 0.0f;
 volatile float park_angle = 0.0f; // 霍尔角度加零点偏移，rad
 volatile uint8_t park_angle_valid = 0; // 本次dq计算是否有有效角度
+volatile float Id_ref = 0.0f, Iq_ref = 0.2f; // 目标电流，A；仅用于计算练习
+volatile float Ud = 0.0f, Uq = 0.0f;         // PI电压指令，V；尚未接入PWM
+volatile uint8_t current_pi_valid = 0;
+static float integral_d = 0.0f, integral_q = 0.0f; // 各轴积分电压，V
 volatile uint32_t clarke_count = 0; // 电流变换次数
 volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
 volatile int8_t hall_direction = 0;    // +1正转，-1反转，0未知
@@ -151,6 +159,37 @@ static void Park_Update(float alpha, float beta, float angle)
     current_q = -alpha * sin_angle + beta * cos_angle;
 }
 
+/* 电压指令限制在正负1V内。 */
+static float Current_PI_Limit(float value)
+{
+    if (value > CURRENT_PI_LIMIT_V) return CURRENT_PI_LIMIT_V;
+    if (value < -CURRENT_PI_LIMIT_V) return -CURRENT_PI_LIMIT_V;
+    return value;
+}
+
+/* 每对电流采样后计算一次；只观察Ud、Uq，不控制PWM。 */
+static void Current_PI_Update(void)
+{
+    float error_d, error_q;
+
+    current_pi_valid = (motor_request != 0U) && (park_angle_valid != 0U);
+    if (current_pi_valid == 0U)
+    {
+        integral_d = integral_q = 0.0f; // 停止或角度无效时清积分
+        Ud = Uq = 0.0f;
+        return;
+    }
+
+    error_d = Id_ref - current_d;
+    error_q = Iq_ref - current_q;
+    integral_d += CURRENT_PI_KI * error_d * CURRENT_PI_DT;
+    integral_q += CURRENT_PI_KI * error_q * CURRENT_PI_DT;
+    integral_d = Current_PI_Limit(integral_d);
+    integral_q = Current_PI_Limit(integral_q);
+    Ud = Current_PI_Limit(CURRENT_PI_KP * error_d + integral_d);
+    Uq = Current_PI_Limit(CURRENT_PI_KP * error_q + integral_q);
+}
+
 /* 角度 = 最近边沿位置 + 估算角速度 × 已过时间，仅供观察。
  * TIM5、TIM8保持相同抢占优先级，避免读到更新了一半的霍尔数据。
  */
@@ -201,11 +240,11 @@ static void Hall_AngleUpdate(void)
 static void Monitor_Print(void)
 {
     static uint32_t last_ms = 0;
-    char line[384];
+    char line[448];
     uint32_t now = HAL_GetTick(), primask, period, edges, pairs, dq_pairs;
-    uint8_t request, enabled, calibrated, state, angle_valid, park_valid;
+    uint8_t request, enabled, calibrated, state, angle_valid, park_valid, pi_valid;
     int8_t direction;
-    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle, id, iq, p_angle;
+    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle, id, iq, p_angle, ud, uq;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -227,6 +266,9 @@ static void Monitor_Print(void)
     angle_valid = hall_angle_valid;
     p_angle = park_angle;
     park_valid = park_angle_valid;
+    pi_valid = current_pi_valid;
+    ud = Ud;
+    uq = Uq;
     dq_pairs = monitor_dq_samples;
     id = monitor_d_sum;
     iq = monitor_q_sum;
@@ -270,7 +312,8 @@ static void Monitor_Print(void)
         "req=%u en=%u cal=%u hall=%u dir=%d dt_us=%lu edges=%lu fe_mHz=%ld "
         "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
         "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu ha_mdeg=%ld ha_ok=%u "
-        "pa_mdeg=%ld pa_ok=%u Id_avg_mA=%ld Iq_avg_mA=%ld dq_pairs=%lu\r\n",
+        "pa_mdeg=%ld pa_ok=%u Id_avg_mA=%ld Iq_avg_mA=%ld dq_pairs=%lu "
+        "Ud_mV=%ld Uq_mV=%ld pi_ok=%u\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
         (unsigned long)edges, (long)(electrical_hz * 1000.0f),
@@ -279,7 +322,8 @@ static void Monitor_Print(void)
         (unsigned long)pairs, (long)(angle * (360000.0f / TWO_PI)),
         (unsigned)angle_valid, (long)(p_angle * (360000.0f / TWO_PI)),
         (unsigned)park_valid, (long)(id * 1000.0f), (long)(iq * 1000.0f),
-        (unsigned long)dq_pairs);
+        (unsigned long)dq_pairs, (long)(ud * 1000.0f), (long)(uq * 1000.0f),
+        (unsigned)pi_valid);
 
     if ((length > 0) && (length < (int)sizeof(line)))
     {
@@ -568,6 +612,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
             monitor_q_sum += current_q;
             monitor_dq_samples++;
         } // 角度无效时保留上次dq值，不计入平均
+        Current_PI_Update();
 
         /* 累加打印统计。 */
         if (monitor_samples == 0U)
