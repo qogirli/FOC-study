@@ -103,6 +103,7 @@ volatile uint8_t park_angle_valid = 0; // 本次dq计算是否有有效角度
 volatile float Id_ref = 0.0f, Iq_ref = 0.2f; // 目标电流，A；仅用于计算练习
 volatile float Ud = 0.0f, Uq = 0.0f;         // PI电压指令，V；尚未接入PWM
 volatile uint8_t current_pi_valid = 0;
+volatile float Ualpha_cl = 0.0f, Ubeta_cl = 0.0f; // 逆Park结果，V；仅观察，不进PWM
 static float integral_d = 0.0f, integral_q = 0.0f; // 各轴积分电压，V
 volatile uint32_t clarke_count = 0; // 电流变换次数
 volatile uint8_t hall_state = 0;       // H3 H2 H1：PH12 PH11 PH10
@@ -157,6 +158,17 @@ static void Park_Update(float alpha, float beta, float angle)
 
     current_d =  alpha * cos_angle + beta * sin_angle;
     current_q = -alpha * sin_angle + beta * cos_angle;
+}
+
+/* 逆Park：Ud/Uq变静止两轴电压，是Park_Update的逆变换，angle必须与Park相同。
+ * 结果存入Ualpha_cl/Ubeta_cl，仅观察，不写入Ualpha/Ubeta，不影响PWM。 */
+static void InversePark_Update(float ud, float uq, float angle)
+{
+    float sin_angle = sinf(angle);
+    float cos_angle = cosf(angle);
+
+    Ualpha_cl = ud * cos_angle - uq * sin_angle;
+    Ubeta_cl  = ud * sin_angle + uq * cos_angle;
 }
 
 /* 电压指令限制在正负1V内。 */
@@ -613,6 +625,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
             monitor_dq_samples++;
         } // 角度无效时保留上次dq值，不计入平均
         Current_PI_Update();
+        if (current_pi_valid != 0U)
+        {
+            InversePark_Update(Ud, Uq, park_angle); // 只观察，不控制PWM
+        }
+        else
+        {
+            Ualpha_cl = Ubeta_cl = 0.0f;
+        }
 
         /* 累加打印统计。 */
         if (monitor_samples == 0U)
