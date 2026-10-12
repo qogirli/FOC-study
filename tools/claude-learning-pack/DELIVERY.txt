@@ -1,0 +1,22 @@
+2026-10-12 Claude学习资料包交付记录
+
+输出目录：C:/Users/33192/Desktop/FOC-Claude学习资料包-20261012
+65个可上传文件，135.87 MB。29个UTF-8文本包，36个PDF图册/原图参考分册。
+最大单文件19.68 MB，PDF每册不超过80页。源码合订包含471个文件条目。
+现成Markdown：直接复用15章外设/电机相关正文及已有关联图片，未运行PaddleOCR或其他OCR。
+图片引用已转换为同包图册及页码。缺失的FOC专题Markdown以原PDF文本层补充，并保留对应图文页。
+代码：当前学习工程、历史开环和六步、620/622/655/654/652/657参考例程、MCSDK 5.2与5.4.3 Any/F4xx、当前HAL相关外设。
+硬件：主板版本、驱动板、接线、电机参数、必要器件手册和RM0090相关章节。
+
+检查：文件清单一致、哈希一致、大小限制、PDF页数、Markdown图片引用、源码边界及关键模块全部通过。
+774条来源哈希在整理末尾重新核对。抽查了Markdown配图、专题手册、PPT和驱动板图的渲染结果。
+未上传Claude，未声称所有资料已被云端成功索引。没有修改固件、烧录或运行硬件。
+
+复现：
+- 原始来源路径写在脚本中，输出目录存在时默认拒绝覆盖。
+- 使用已有Python环境中的pypdf、reportlab和pymupdf。此次将pymupdf装在忽略目录build/deps中，未修改系统依赖。
+- export_slides.ps1通过PowerPoint只读打开来源，导出PPT图文至build/slides。
+- build_pack.py --texts 打包现成Markdown和源码；--finish 补齐图文资料和目录。
+- validate_pack.py验证结构、哈希、关键模块并渲染抽查页。
+- build/保存工作文件、manifest.json及validation.json，未将大型衍生资料提交到Git。
+- 本地修改代码后应重新导出当前工程文本并替换Claude项目里的旧快照，不会自动同步。
