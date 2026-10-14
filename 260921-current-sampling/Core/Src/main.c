@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +46,21 @@
 #define HALL_EDGES_PER_CYCLE   6.0f       // 每电角度圈6个区间
 #define HALL_SECTOR_RAD        (TWO_PI / HALL_EDGES_PER_CYCLE)
 #define HALL_PHASE_SHIFT_DEG   120.0f // 硬石655参考偏移，实际接线待验证
+/* 编码器对零和电角度。1000线4倍频=4000计数/圈；极对数4由日志算得（一个电周期1000计数）。 */
+#define ENCODER_COUNTS_PER_REV  4000
+#define MOTOR_POLE_PAIRS        4
+#define ENCODER_COUNTS_PER_ELEC (ENCODER_COUNTS_PER_REV / MOTOR_POLE_PAIRS)
+#define HALF_PI                 1.5707963f
+#define AUX_NONE                0U // 辅助模式：无
+#define AUX_ALIGN               1U // 对零：电压矢量固定在0度
+#define AUX_ENC_SPIN            2U // 编码器换相：电压矢量超前转子90度
+#define ALIGN_VOLTAGE_V         1.0f  // 对零电压，V；与开环相同，不提高
+#define ALIGN_HOLD_MS           2000U // 对零保持时间，ms
+#define ALIGN_CHECK_BEFORE_MS   300U  // 结束前这么久读一次计数，判断转子已静止
+#define ALIGN_MAX_DRIFT_COUNTS  5     // 静止判据：两次计数相差不超过这个值
+#define ENC_SPIN_VOLTAGE_V      1.0f  // 编码器换相电压（只有Uq），V
+#define ENC_SPIN_MAX_MS         5000U // 编码器换相最长时间，ms
+#define ENC_OVERSPEED_COUNTS    12    // 每个PWM周期（50us）计数变化超过这个值就停，约3600rpm
 #define HALL_PHASE_SHIFT_RAD   (HALL_PHASE_SHIFT_DEG * TWO_PI / 360.0f)
 #define HALL_STOP_TIMEOUT_MS   1000U     // 无边沿超时，ms
 #define MONITOR_PERIOD_MS      100U    // 打印间隔，ms
@@ -122,6 +138,11 @@ static volatile float monitor_u_min = 0.0f, monitor_u_max = 0.0f;
 static volatile float monitor_v_min = 0.0f, monitor_v_max = 0.0f;
 static volatile uint32_t monitor_dq_samples = 0;
 static volatile float monitor_d_sum = 0.0f, monitor_q_sum = 0.0f;
+/* 编码器零点和辅助模式：0无，1对零，2编码器换相。 */
+static volatile uint32_t enc_zero = 0;
+static volatile uint8_t enc_zero_valid = 0;
+static volatile uint8_t aux_mode = AUX_NONE;
+static volatile uint8_t drive_fault = 0; // 1=编码器换相超速，已停机
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -344,11 +365,45 @@ static void Monitor_Print(void)
     }
 }
 
-/* 编码器原始计数，每100ms打印一次。电机不上电，用手转轴观察。 */
+/* 编码器电角度，0到2pi：相对对零时的计数，每ENCODER_COUNTS_PER_ELEC个计数一圈。 */
+static float Encoder_ElectricalAngle(void)
+{
+    int32_t relative = (int32_t)(__HAL_TIM_GET_COUNTER(&htim2) - enc_zero);
+    int32_t within = relative % (int32_t)ENCODER_COUNTS_PER_ELEC;
+
+    if (within < 0) within += (int32_t)ENCODER_COUNTS_PER_ELEC;
+    return TWO_PI * (float)within / (float)ENCODER_COUNTS_PER_ELEC;
+}
+
+/* 串口发一行文字，超时很短，不影响控制。 */
+static void Print_Text(const char *text)
+{
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)text,
+                            (uint16_t)strlen(text), MONITOR_TX_TIMEOUT_MS);
+}
+
+/* 读串口命令，每次一个字符：a对零，v编码器换相，x全部停止，p检查串口。 */
+static uint8_t Serial_ReadCommand(void)
+{
+    uint8_t command = 0;
+
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE))
+    {
+        (void)huart1.Instance->SR; // 清溢出标志：先读SR再读DR
+        (void)huart1.Instance->DR;
+    }
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE))
+    {
+        command = (uint8_t)(huart1.Instance->DR & 0xFFU);
+    }
+    return command;
+}
+
+/* 编码器原始计数、电角度，每100ms打印一次。 */
 static void Encoder_Print(void)
 {
     static uint32_t last_ms = 0, last_count = 0;
-    char line[96];
+    char line[128];
     uint32_t now = HAL_GetTick(), count;
     int32_t delta;
     int length;
@@ -361,12 +416,136 @@ static void Encoder_Print(void)
     delta = (int32_t)(count - last_count); // 正转或反转由符号区分
     last_count = count;
 
-    length = snprintf(line, sizeof(line), "enc_cnt=%lu enc_delta=%ld\r\n",
-                      (unsigned long)count, (long)delta);
+    length = snprintf(line, sizeof(line),
+        "enc_cnt=%lu enc_delta=%ld enc_ok=%u enc_e_mdeg=%ld aux=%u\r\n",
+        (unsigned long)count, (long)delta, (unsigned)enc_zero_valid,
+        (long)(Encoder_ElectricalAngle() * (360000.0f / TWO_PI)),
+        (unsigned)aux_mode);
     if ((length > 0) && (length < (int)sizeof(line)))
     {
         (void)HAL_UART_Transmit(&huart1, (uint8_t *)line,
                                 (uint16_t)length, MONITOR_TX_TIMEOUT_MS);
+    }
+}
+
+/* 对零和编码器换相的启停与计时。KEY2或'a'对零，KEY3或'v'编码器换相，KEY1或'x'停止。 */
+static void Drive_AuxUpdate(void)
+{
+    static uint8_t key2_armed = 0, key3_armed = 0, checked = 0;
+    static uint32_t start_ms = 0, check_count = 0;
+    char line[96];
+    uint32_t now = HAL_GetTick(), count;
+    int32_t drift;
+    uint8_t command = Serial_ReadCommand();
+    uint8_t align_event = (command == 'a') ? 1U : 0U;
+    uint8_t spin_event = (command == 'v') ? 1U : 0U;
+    uint8_t calibrated = ((adc_u_offset_ready != 0U) && (adc_v_offset_ready != 0U)) ? 1U : 0U;
+    int length;
+
+    /* 按键松开后再按下才算一次。 */
+    if (HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin) == GPIO_PIN_SET)
+    {
+        key2_armed = 1;
+    }
+    else if (key2_armed == 1)
+    {
+        key2_armed = 0;
+        align_event = 1;
+    }
+    if (HAL_GPIO_ReadPin(KEY3_GPIO_Port, KEY3_Pin) == GPIO_PIN_SET)
+    {
+        key3_armed = 1;
+    }
+    else if (key3_armed == 1)
+    {
+        key3_armed = 0;
+        spin_event = 1;
+    }
+
+    if (command == 'p')
+    {
+        Print_Text("pong\r\n");
+    }
+    if (drive_fault != 0U)
+    {
+        drive_fault = 0;
+        Print_Text("fault: overspeed, stopped\r\n");
+    }
+
+    if (command == 'x')
+    {
+        aux_mode = AUX_NONE;
+        motor_request = 0;
+        Print_Text("stop\r\n");
+    }
+    else if ((align_event != 0U) || (spin_event != 0U))
+    {
+        if (aux_mode != AUX_NONE)
+        {
+            aux_mode = AUX_NONE; // 再按一次就停
+            Print_Text("stop\r\n");
+        }
+        else if ((motor_request != 0U) || (calibrated == 0U))
+        {
+            Print_Text("refused: running or not calibrated\r\n");
+        }
+        else if (align_event != 0U)
+        {
+            enc_zero_valid = 0;
+            checked = 0;
+            start_ms = now;
+            aux_mode = AUX_ALIGN;
+            Print_Text("align start\r\n");
+        }
+        else if (enc_zero_valid == 0U)
+        {
+            Print_Text("refused: align first\r\n");
+        }
+        else
+        {
+            start_ms = now;
+            aux_mode = AUX_ENC_SPIN;
+            Print_Text("spin start\r\n");
+        }
+    }
+
+    if (aux_mode == AUX_ALIGN)
+    {
+        if ((checked == 0U) &&
+            ((uint32_t)(now - start_ms) >= (ALIGN_HOLD_MS - ALIGN_CHECK_BEFORE_MS)))
+        {
+            check_count = __HAL_TIM_GET_COUNTER(&htim2);
+            checked = 1;
+        }
+        if ((uint32_t)(now - start_ms) >= ALIGN_HOLD_MS)
+        {
+            count = __HAL_TIM_GET_COUNTER(&htim2);
+            drift = (int32_t)(count - check_count); // 最后一段时间转子是否还在动
+            if ((drift <= ALIGN_MAX_DRIFT_COUNTS) && (drift >= -ALIGN_MAX_DRIFT_COUNTS))
+            {
+                enc_zero = count;
+                enc_zero_valid = 1;
+            }
+            else
+            {
+                enc_zero_valid = 0;
+            }
+            aux_mode = AUX_NONE;
+            length = snprintf(line, sizeof(line), "align ok=%u zero=%lu drift=%ld\r\n",
+                              (unsigned)enc_zero_valid, (unsigned long)count, (long)drift);
+            if ((length > 0) && (length < (int)sizeof(line)))
+            {
+                Print_Text(line);
+            }
+        }
+    }
+    else if (aux_mode == AUX_ENC_SPIN)
+    {
+        if ((uint32_t)(now - start_ms) >= ENC_SPIN_MAX_MS)
+        {
+            aux_mode = AUX_NONE;
+            Print_Text("spin end\r\n");
+        }
     }
 }
 
@@ -455,6 +634,7 @@ int main(void)
     if ((adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
     {
         motor_request = 0;
+        aux_mode = AUX_NONE;
         key_armed = 0;
     }
     /* KEY1松开后再按下，切换启停。 */
@@ -466,9 +646,17 @@ int main(void)
              (key_armed == 1))
     {
         key_armed = 0;
-        motor_request = !motor_request;
+        if (aux_mode != AUX_NONE)
+        {
+            aux_mode = AUX_NONE; // 对零或编码器换相中，KEY1只负责停止
+        }
+        else
+        {
+            motor_request = !motor_request;
+        }
     }
 
+    Drive_AuxUpdate();
     Monitor_Print();
     Encoder_Print();
     HAL_Delay(20); // 按键轮询间隔，ms
@@ -692,10 +880,33 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4))
     {
         static uint8_t pwm_prepared = 0;
+        static uint32_t spin_last_count = 0;
+        static uint8_t spin_started = 0;
+        float vmag; // 本周期电压矢量幅值，V
 
         Hall_AngleUpdate(); // 独立观察霍尔角度
 
-        if ((motor_request == 0) ||
+        /* 编码器换相超速保护：相邻两个PWM周期计数变化太大就停机。 */
+        if (aux_mode == AUX_ENC_SPIN)
+        {
+            uint32_t count = __HAL_TIM_GET_COUNTER(&htim2);
+            int32_t step = (int32_t)(count - spin_last_count);
+
+            if ((spin_started != 0U) &&
+                ((step > ENC_OVERSPEED_COUNTS) || (step < -ENC_OVERSPEED_COUNTS)))
+            {
+                aux_mode = AUX_NONE;
+                drive_fault = 1;
+            }
+            spin_last_count = count;
+            spin_started = 1;
+        }
+        else
+        {
+            spin_started = 0;
+        }
+
+        if (((motor_request == 0) && (aux_mode == AUX_NONE)) ||
             (adc_u_offset_ready == 0) || (adc_v_offset_ready == 0))
         {
             /* 停止或未校准：关闭驱动。 */
@@ -716,7 +927,10 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         {
             /* CCR装载后使能驱动，并推进开环角度。 */
             HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
-            theta += TWO_PI * frequency / PWM_UPDATE_HZ;
+            if (aux_mode == AUX_NONE)
+            {
+                theta += TWO_PI * frequency / PWM_UPDATE_HZ;
+            }
         }
 
 			if (theta >= TWO_PI)
@@ -724,8 +938,21 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 				theta -= TWO_PI;
 			}
 
-			Ualpha = voltage * cosf(theta);
-			Ubeta  = voltage * sinf(theta);
+			vmag = voltage;
+			if (aux_mode == AUX_ALIGN)
+			{
+			    theta = 0.0f; // 电压矢量固定在0度，转子被拉到d轴
+			    vmag = ALIGN_VOLTAGE_V;
+			}
+			else if (aux_mode == AUX_ENC_SPIN)
+			{
+			    theta = Encoder_ElectricalAngle() + HALF_PI; // 电压矢量超前转子90度，只有Uq
+			    if (theta >= TWO_PI) theta -= TWO_PI;
+			    vmag = ENC_SPIN_VOLTAGE_V;
+			}
+
+			Ualpha = vmag * cosf(theta);
+			Ubeta  = vmag * sinf(theta);
 
 			U1 = Ubeta;
 			U2 =  SIN_60 * Ualpha - COS_60 * Ubeta;
