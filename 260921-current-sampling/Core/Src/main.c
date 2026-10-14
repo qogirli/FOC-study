@@ -495,8 +495,8 @@ static void Speed_Loop_Update(void)
     speed_sq += speed_rpm * speed_rpm;
     speed_samples++;
 
-    if (aux_mode == AUX_ENC_SPIN)
-        return; // 编码器换相只测速，不闭环
+    if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_CURRENT))
+        return; // 编码器换相、电流环只测速，不闭环
 
     if (aux_mode == AUX_POSITION)
     {
@@ -1145,7 +1145,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         }
 
         /* 编码器测速；速度环、位置环在其中每1ms算一次，输出Iq给定。 */
-        if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
+        if ((aux_mode == AUX_ENC_SPIN) || AUX_USES_CURRENT_LOOP())
         {
             Speed_Loop_Update();
         }
