@@ -61,6 +61,11 @@
 #define ENC_SPIN_VOLTAGE_V      1.0f  // 编码器换相电压（只有Uq），V
 #define ENC_SPIN_MAX_MS         5000U // 编码器换相最长时间，ms
 #define ENC_OVERSPEED_COUNTS    12    // 每个PWM周期（50us）计数变化超过这个值就停，约3600rpm
+#define AUX_CURRENT             3U // 电流环：Id、Iq跟踪给定，用编码器角度
+#define CURRENT_SIGN            (-1.0f) // 实测：电压矢量0度时U相读数为负，所以取反
+#define CURRENT_REF_STEP_A      0.1f // 串口命令每次改变的电流给定，A
+#define ID_REF_MAX_A            1.0f // d轴电流给定上限，A
+#define IQ_REF_MAX_A            0.6f // q轴电流给定上限，A
 #define HALL_PHASE_SHIFT_RAD   (HALL_PHASE_SHIFT_DEG * TWO_PI / 360.0f)
 #define HALL_STOP_TIMEOUT_MS   1000U     // 无边沿超时，ms
 #define MONITOR_PERIOD_MS      100U    // 打印间隔，ms
@@ -71,8 +76,8 @@
 #define ADC_VREF_V             3.3f   // 标称ADC参考电压，V
 #define CURRENT_SHUNT_OHM      0.02f  // 2024版原理图 R12/R18/R24
 #define CURRENT_AMP_GAIN       (5100.0f / (1200.0f + 68.0f))
-#define CURRENT_PI_KP          0.5f // 计算练习值，V/A；尚未调参
-#define CURRENT_PI_KI          5.0f // V/(A*s)
+#define CURRENT_PI_KP          0.5f // V/A；起点按每相0.5欧、电感约1mH估，尚未实测调参
+#define CURRENT_PI_KI          250.0f // V/(A*s)；PI零点约500rad/s
 #define CURRENT_PI_DT          (1.0f / PWM_UPDATE_HZ) // 采样间隔，s
 #define CURRENT_PI_LIMIT_V     1.0f // 每轴电压指令限幅，V
 
@@ -138,6 +143,7 @@ static volatile float monitor_u_min = 0.0f, monitor_u_max = 0.0f;
 static volatile float monitor_v_min = 0.0f, monitor_v_max = 0.0f;
 static volatile uint32_t monitor_dq_samples = 0;
 static volatile float monitor_d_sum = 0.0f, monitor_q_sum = 0.0f;
+static volatile float monitor_d_sq = 0.0f, monitor_q_sq = 0.0f; // dq电流平方和，算窗口标准差
 /* 编码器零点和辅助模式：0无，1对零，2编码器换相。 */
 static volatile uint32_t enc_zero = 0;
 static volatile uint8_t enc_zero_valid = 0;
@@ -159,7 +165,7 @@ static float ADC_ToCurrent(uint16_t raw, float offset)
     float voltage_delta;
 
     voltage_delta = ((float)raw - offset) * ADC_VREF_V / ADC_COUNTS_PER_RANGE;
-    return voltage_delta / CURRENT_AMP_GAIN / CURRENT_SHUNT_OHM;
+    return CURRENT_SIGN * voltage_delta / CURRENT_AMP_GAIN / CURRENT_SHUNT_OHM;
 }
 
 /* 等幅值Clarke：三相变静止两轴，alpha与U相重合。 */
@@ -203,9 +209,9 @@ static float Current_PI_Limit(float value)
 /* 每对电流采样后计算一次；只观察Ud、Uq，不控制PWM。 */
 static void Current_PI_Update(void)
 {
-    float error_d, error_q;
+    float error_d, error_q, vector_square, vector_scale;
 
-    current_pi_valid = (motor_request != 0U) && (park_angle_valid != 0U);
+    current_pi_valid = ((motor_request != 0U) || (aux_mode == AUX_CURRENT)) && (park_angle_valid != 0U);
     if (current_pi_valid == 0U)
     {
         integral_d = integral_q = 0.0f; // 停止或角度无效时清积分
@@ -221,6 +227,14 @@ static void Current_PI_Update(void)
     integral_q = Current_PI_Limit(integral_q);
     Ud = Current_PI_Limit(CURRENT_PI_KP * error_d + integral_d);
     Uq = Current_PI_Limit(CURRENT_PI_KP * error_q + integral_q);
+    /* 合成电压矢量也限制在1V内，保持比例。 */
+    vector_square = Ud * Ud + Uq * Uq;
+    if (vector_square > (CURRENT_PI_LIMIT_V * CURRENT_PI_LIMIT_V))
+    {
+        vector_scale = CURRENT_PI_LIMIT_V / sqrtf(vector_square);
+        Ud *= vector_scale;
+        Uq *= vector_scale;
+    }
 }
 
 /* 角度 = 最近边沿位置 + 估算角速度 × 已过时间，仅供观察。
@@ -277,7 +291,7 @@ static void Monitor_Print(void)
     uint32_t now = HAL_GetTick(), primask, period, edges, pairs, dq_pairs;
     uint8_t request, enabled, calibrated, state, angle_valid, park_valid, pi_valid;
     int8_t direction;
-    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle, id, iq, p_angle, ud, uq;
+    float iu, iv, u_min, u_max, v_min, v_max, electrical_hz, angle, id, iq, p_angle, ud, uq, id_sq, iq_sq, id_sd, iq_sd;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -305,6 +319,8 @@ static void Monitor_Print(void)
     dq_pairs = monitor_dq_samples;
     id = monitor_d_sum;
     iq = monitor_q_sum;
+    id_sq = monitor_d_sq;
+    iq_sq = monitor_q_sq;
     pairs = monitor_samples;
     iu = monitor_u_sum;
     iv = monitor_v_sum;
@@ -317,6 +333,7 @@ static void Monitor_Print(void)
     monitor_v_sum = 0.0f;
     monitor_dq_samples = 0;
     monitor_d_sum = monitor_q_sum = 0.0f;
+    monitor_d_sq = monitor_q_sq = 0.0f;
     __set_PRIMASK(primask);
 
     if (pairs != 0U)
@@ -334,10 +351,14 @@ static void Monitor_Print(void)
     {
         id /= (float)dq_pairs;
         iq /= (float)dq_pairs;
+        id_sq /= (float)dq_pairs;
+        iq_sq /= (float)dq_pairs;
+        id_sd = sqrtf(fmaxf(id_sq - id * id, 0.0f)); // 窗口内标准差，含测量噪声
+        iq_sd = sqrtf(fmaxf(iq_sq - iq * iq, 0.0f));
     }
     else
     {
-        id = iq = 0.0f; // 无有效dq采样时打印占位值
+        id = iq = id_sd = iq_sd = 0.0f; // 无有效dq采样时打印占位值
     }
 
     /* 电流用mA、角度用千分之一度；dq_pairs只统计角度有效的采样。 */
@@ -346,7 +367,7 @@ static void Monitor_Print(void)
         "Iu_avg_mA=%ld Iu_min=%ld Iu_max=%ld "
         "Iv_avg_mA=%ld Iv_min=%ld Iv_max=%ld pairs=%lu ha_mdeg=%ld ha_ok=%u "
         "pa_mdeg=%ld pa_ok=%u Id_avg_mA=%ld Iq_avg_mA=%ld dq_pairs=%lu "
-        "Ud_mV=%ld Uq_mV=%ld pi_ok=%u\r\n",
+        "Ud_mV=%ld Uq_mV=%ld pi_ok=%u Id_sd_mA=%ld Iq_sd_mA=%ld\r\n",
         (unsigned)request, (unsigned)enabled, (unsigned)calibrated,
         (unsigned)state, (int)direction, (unsigned long)period,
         (unsigned long)edges, (long)(electrical_hz * 1000.0f),
@@ -356,7 +377,7 @@ static void Monitor_Print(void)
         (unsigned)angle_valid, (long)(p_angle * (360000.0f / TWO_PI)),
         (unsigned)park_valid, (long)(id * 1000.0f), (long)(iq * 1000.0f),
         (unsigned long)dq_pairs, (long)(ud * 1000.0f), (long)(uq * 1000.0f),
-        (unsigned)pi_valid);
+        (unsigned)pi_valid, (long)(id_sd * 1000.0f), (long)(iq_sd * 1000.0f));
 
     if ((length > 0) && (length < (int)sizeof(line)))
     {
@@ -417,10 +438,10 @@ static void Encoder_Print(void)
     last_count = count;
 
     length = snprintf(line, sizeof(line),
-        "enc_cnt=%lu enc_delta=%ld enc_ok=%u enc_e_mdeg=%ld aux=%u\r\n",
+        "enc_cnt=%lu enc_delta=%ld enc_ok=%u enc_e_mdeg=%ld aux=%u ref_d=%ld ref_q=%ld\r\n",
         (unsigned long)count, (long)delta, (unsigned)enc_zero_valid,
         (long)(Encoder_ElectricalAngle() * (360000.0f / TWO_PI)),
-        (unsigned)aux_mode);
+        (unsigned)aux_mode, (long)(Id_ref * 1000.0f), (long)(Iq_ref * 1000.0f));
     if ((length > 0) && (length < (int)sizeof(line)))
     {
         (void)HAL_UART_Transmit(&huart1, (uint8_t *)line,
@@ -439,6 +460,7 @@ static void Drive_AuxUpdate(void)
     uint8_t command = Serial_ReadCommand();
     uint8_t align_event = (command == 'a') ? 1U : 0U;
     uint8_t spin_event = (command == 'v') ? 1U : 0U;
+    uint8_t current_event = (command == 'c') ? 1U : 0U;
     uint8_t calibrated = ((adc_u_offset_ready != 0U) && (adc_v_offset_ready != 0U)) ? 1U : 0U;
     int length;
 
@@ -462,6 +484,20 @@ static void Drive_AuxUpdate(void)
         spin_event = 1;
     }
 
+    /* 电流环运行中：u/j改Iq给定，i/k改Id给定，0清零，每次0.1A。 */
+    if (aux_mode == AUX_CURRENT)
+    {
+        if (command == 'u') Iq_ref += CURRENT_REF_STEP_A;
+        else if (command == 'j') Iq_ref -= CURRENT_REF_STEP_A;
+        else if (command == 'i') Id_ref += CURRENT_REF_STEP_A;
+        else if (command == 'k') Id_ref -= CURRENT_REF_STEP_A;
+        else if (command == '0') Id_ref = Iq_ref = 0.0f;
+        if (Iq_ref > IQ_REF_MAX_A) Iq_ref = IQ_REF_MAX_A;
+        if (Iq_ref < -IQ_REF_MAX_A) Iq_ref = -IQ_REF_MAX_A;
+        if (Id_ref > ID_REF_MAX_A) Id_ref = ID_REF_MAX_A;
+        if (Id_ref < -ID_REF_MAX_A) Id_ref = -ID_REF_MAX_A;
+    }
+
     if (command == 'p')
     {
         Print_Text("pong\r\n");
@@ -478,7 +514,7 @@ static void Drive_AuxUpdate(void)
         motor_request = 0;
         Print_Text("stop\r\n");
     }
-    else if ((align_event != 0U) || (spin_event != 0U))
+    else if ((align_event != 0U) || (spin_event != 0U) || (current_event != 0U))
     {
         if (aux_mode != AUX_NONE)
         {
@@ -501,11 +537,19 @@ static void Drive_AuxUpdate(void)
         {
             Print_Text("refused: align first\r\n");
         }
-        else
+        else if (spin_event != 0U)
         {
             start_ms = now;
             aux_mode = AUX_ENC_SPIN;
             Print_Text("spin start\r\n");
+        }
+        else
+        {
+            Id_ref = 0.0f; // 电流环从零给定开始，再用串口命令调整
+            Iq_ref = 0.0f;
+            start_ms = now;
+            aux_mode = AUX_CURRENT;
+            Print_Text("current start\r\n");
         }
     }
 
@@ -539,7 +583,7 @@ static void Drive_AuxUpdate(void)
             }
         }
     }
-    else if (aux_mode == AUX_ENC_SPIN)
+    else if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_CURRENT))
     {
         if ((uint32_t)(now - start_ms) >= ENC_SPIN_MAX_MS)
         {
@@ -833,16 +877,29 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         current_v = ADC_ToCurrent(adc_v_raw, adc_v_offset);
         Clarke_Update(current_u, current_v);
         Hall_AngleUpdate();
-        park_angle_valid = hall_angle_valid;
+        if (enc_zero_valid != 0U)
+        {
+            park_angle = Encoder_ElectricalAngle(); // 已对零：用编码器电角度
+            park_angle_valid = 1;
+        }
+        else
+        {
+            park_angle_valid = hall_angle_valid;
+            if (park_angle_valid != 0U)
+            {
+                /* 霍尔相对角度加参考偏移，作为Park的旋转角度。 */
+                park_angle = hall_angle + HALL_PHASE_SHIFT_RAD;
+                if (park_angle >= TWO_PI) park_angle -= TWO_PI;
+                if (park_angle < 0.0f) park_angle += TWO_PI;
+            }
+        }
         if (park_angle_valid != 0U)
         {
-            /* 霍尔相对角度加参考偏移，作为Park的旋转角度。 */
-            park_angle = hall_angle + HALL_PHASE_SHIFT_RAD;
-            if (park_angle >= TWO_PI) park_angle -= TWO_PI;
-            if (park_angle < 0.0f) park_angle += TWO_PI;
             Park_Update(current_alpha, current_beta, park_angle);
             monitor_d_sum += current_d;
             monitor_q_sum += current_q;
+            monitor_d_sq += current_d * current_d;
+            monitor_q_sq += current_q * current_q;
             monitor_dq_samples++;
         } // 角度无效时保留上次dq值，不计入平均
         Current_PI_Update();
@@ -882,12 +939,13 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         static uint8_t pwm_prepared = 0;
         static uint32_t spin_last_count = 0;
         static uint8_t spin_started = 0;
+        float angle_now; // 电流环用的编码器电角度，rad
         float vmag; // 本周期电压矢量幅值，V
 
         Hall_AngleUpdate(); // 独立观察霍尔角度
 
         /* 编码器换相超速保护：相邻两个PWM周期计数变化太大就停机。 */
-        if (aux_mode == AUX_ENC_SPIN)
+        if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_CURRENT))
         {
             uint32_t count = __HAL_TIM_GET_COUNTER(&htim2);
             int32_t step = (int32_t)(count - spin_last_count);
@@ -950,9 +1008,22 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 			    if (theta >= TWO_PI) theta -= TWO_PI;
 			    vmag = ENC_SPIN_VOLTAGE_V;
 			}
+			else if (aux_mode == AUX_CURRENT)
+			{
+				angle_now = Encoder_ElectricalAngle(); // 逆Park用同一个编码器角度
+			}
 
-			Ualpha = vmag * cosf(theta);
-			Ubeta  = vmag * sinf(theta);
+			if (aux_mode == AUX_CURRENT)
+			{
+				/* 逆Park：PI输出的Ud、Uq变成静止两轴电压。 */
+				Ualpha = Ud * cosf(angle_now) - Uq * sinf(angle_now);
+				Ubeta  = Ud * sinf(angle_now) + Uq * cosf(angle_now);
+			}
+			else
+			{
+				Ualpha = vmag * cosf(theta);
+				Ubeta  = vmag * sinf(theta);
+			}
 
 			U1 = Ubeta;
 			U2 =  SIN_60 * Ualpha - COS_60 * Ubeta;
