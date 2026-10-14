@@ -55,8 +55,10 @@
 #define AUX_ALIGN               1U // 对零：电压矢量固定在0度
 #define AUX_ENC_SPIN            2U // 编码器换相：电压矢量超前转子90度
 #define ALIGN_VOLTAGE_V         1.0f  // 对零电压，V；与开环相同，不提高
-#define ALIGN_HOLD_MS           2000U // 对零保持时间，ms
-#define ALIGN_CHECK_BEFORE_MS   300U  // 结束前这么久读一次计数，判断转子已静止
+#define ALIGN_KICK_MS           600U  // 对零先把矢量放在+90度或-90度，让转子离开0度和180度，ms
+#define ALIGN_SETTLE_MS         800U  // 再回到0度保持，转子停下，ms
+#define ALIGN_MAX_SPREAD_COUNTS 120   // 两次从相反方向停下的位置最多差这么多计数（约43度电角度）
+#define ALIGN_CHECK_BEFORE_MS   300U  // 每段结束前这么久读一次计数，判断转子已静止
 #define ALIGN_MAX_DRIFT_COUNTS  5     // 静止判据：两次计数相差不超过这个值
 #define ENC_SPIN_VOLTAGE_V      1.0f  // 编码器换相电压（只有Uq），V
 #define ENC_SPIN_MAX_MS         5000U // 编码器换相最长时间，ms
@@ -73,8 +75,8 @@
 #define SPEED_WINDOW_STEPS      5U // 测速窗口：5次1ms，即5ms，分辨率3rpm
 #define SPEED_RPM_PER_COUNT     (60.0f * 1000.0f / ((float)SPEED_WINDOW_STEPS * (float)ENCODER_COUNTS_PER_REV)) // 窗口内每个计数对应的rpm
 #define SPEED_PI_DT             0.001f // 速度环周期，s
-#define SPEED_PI_KP             0.003f // A/rpm；起点值，上板后调
-#define SPEED_PI_KI             0.1f   // A/(rpm*s)；积分要能克服约0.45A的静摩擦
+#define SPEED_PI_KP             0.015f // A/rpm；0.003时低速粘滑来回抖，0.015起稳
+#define SPEED_PI_KI             0.3f   // A/(rpm*s)
 #define SPEED_REF_STEP_RPM      20.0f  // 串口命令每次改变的速度给定，rpm
 #define SPEED_REF_MAX_RPM       120.0f // 速度给定上限，rpm；1V时空载约150rpm
 #define POSITION_STEP_COUNTS    1000   // 串口命令每次改变的位置给定，计数，约90度机械角
@@ -163,6 +165,7 @@ static volatile uint32_t enc_zero = 0;
 static volatile uint8_t enc_zero_valid = 0;
 static volatile uint8_t aux_mode = AUX_NONE;
 static volatile uint8_t drive_fault = 0; // 1=编码器换相超速，已停机
+static volatile float align_theta = 0.0f; // 对零时电压矢量角度，rad
 /* 速度环、位置环：编码器测速，PI输出Iq给定。 */
 static volatile float speed_rpm = 0.0f;     // 编码器测速（10ms窗口），rpm
 static volatile float speed_ref_rpm = 0.0f; // 速度给定，rpm
@@ -571,6 +574,8 @@ static void Drive_AuxUpdate(void)
 {
     static uint8_t key2_armed = 0, key3_armed = 0, checked = 0;
     static uint32_t position_home = 0; // 进入位置环时的计数，'0'命令回到这里
+    static uint8_t align_stage = 0, align_failed = 0; // 对零阶段：0从+90度回0度，1从-90度回0度
+    static uint32_t align_end_count[2]; // 两个阶段停稳后的计数
     static uint32_t start_ms = 0, check_count = 0;
     char line[96];
     uint32_t now = HAL_GetTick(), count;
@@ -689,6 +694,9 @@ static void Drive_AuxUpdate(void)
         {
             enc_zero_valid = 0;
             checked = 0;
+            align_stage = 0;
+            align_failed = 0;
+            align_theta = HALF_PI;
             start_ms = now;
             aux_mode = AUX_ALIGN;
             Print_Text("align start\r\n");
@@ -735,19 +743,33 @@ static void Drive_AuxUpdate(void)
 
     if (aux_mode == AUX_ALIGN)
     {
-        if ((checked == 0U) &&
-            ((uint32_t)(now - start_ms) >= (ALIGN_HOLD_MS - ALIGN_CHECK_BEFORE_MS)))
-        {
-            check_count = __HAL_TIM_GET_COUNTER(&htim2);
-            checked = 1;
-        }
-        if ((uint32_t)(now - start_ms) >= ALIGN_HOLD_MS)
+        /* 两段对零：先+90度再回0度，再-90度再回0度。每段转子都要走一段路才停在0度附近，
+         * 不会卡在0度对面的180度（静摩擦大，转子在180度附近不会自己转过来）。
+         * 两次停下位置各偏向来的那一边，取平均才是0度。 */
+        uint32_t stage_ms = ALIGN_KICK_MS + ALIGN_SETTLE_MS;
+        uint32_t elapsed = now - start_ms;
+        uint32_t stage = elapsed / stage_ms;
+        uint32_t in_stage = elapsed % stage_ms;
+        int32_t spread;
+
+        if (stage != align_stage) // 上一段结束：记下停稳后的计数，并检查最后一段时间转子没有动
         {
             count = __HAL_TIM_GET_COUNTER(&htim2);
-            drift = (int32_t)(count - check_count); // 最后一段时间转子是否还在动
-            if ((drift <= ALIGN_MAX_DRIFT_COUNTS) && (drift >= -ALIGN_MAX_DRIFT_COUNTS))
+            drift = (int32_t)(count - check_count);
+            if ((drift > ALIGN_MAX_DRIFT_COUNTS) || (drift < -ALIGN_MAX_DRIFT_COUNTS))
             {
-                enc_zero = count;
+                align_failed = 1;
+            }
+            align_end_count[align_stage] = count;
+            align_stage = (uint8_t)stage;
+            checked = 0;
+        }
+        if (stage >= 2U)
+        {
+            spread = (int32_t)(align_end_count[1] - align_end_count[0]);
+            if ((align_failed == 0U) && (spread <= ALIGN_MAX_SPREAD_COUNTS) && (spread >= -ALIGN_MAX_SPREAD_COUNTS))
+            {
+                enc_zero = align_end_count[0] + (uint32_t)(spread / 2);
                 enc_zero_valid = 1;
             }
             else
@@ -755,11 +777,27 @@ static void Drive_AuxUpdate(void)
                 enc_zero_valid = 0;
             }
             aux_mode = AUX_NONE;
-            length = snprintf(line, sizeof(line), "align ok=%u zero=%lu drift=%ld\r\n",
-                              (unsigned)enc_zero_valid, (unsigned long)count, (long)drift);
+            length = snprintf(line, sizeof(line), "align ok=%u zero=%lu spread=%ld fail=%u\r\n",
+                              (unsigned)enc_zero_valid, (unsigned long)enc_zero, (long)spread, (unsigned)align_failed);
             if ((length > 0) && (length < (int)sizeof(line)))
             {
                 Print_Text(line);
+            }
+        }
+        else
+        {
+            if ((checked == 0U) && (in_stage >= (stage_ms - ALIGN_CHECK_BEFORE_MS)))
+            {
+                check_count = __HAL_TIM_GET_COUNTER(&htim2);
+                checked = 1;
+            }
+            if (in_stage < ALIGN_KICK_MS)
+            {
+                align_theta = (stage == 0U) ? HALF_PI : (TWO_PI - HALF_PI);
+            }
+            else
+            {
+                align_theta = 0.0f;
             }
         }
     }
@@ -1189,7 +1227,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 			vmag = voltage;
 			if (aux_mode == AUX_ALIGN)
 			{
-			    theta = 0.0f; // 电压矢量固定在0度，转子被拉到d轴
+			    theta = align_theta; // 对零分段：+90度、0度、-90度、0度
 			    vmag = ALIGN_VOLTAGE_V;
 			}
 			else if (aux_mode == AUX_ENC_SPIN)
