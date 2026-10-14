@@ -65,7 +65,7 @@
 #define CURRENT_SIGN            (-1.0f) // 实测：电压矢量0度时U相读数为负，所以取反
 #define CURRENT_REF_STEP_A      0.1f // 串口命令每次改变的电流给定，A
 #define ID_REF_MAX_A            1.0f // d轴电流给定上限，A
-#define IQ_REF_MAX_A            0.6f // q轴电流给定上限，A
+#define IQ_REF_MAX_A            1.0f // q轴电流给定上限，A；对零用过1.95A，仍在1V电压限幅内；0.6A克服不了静摩擦
 #define AUX_SPEED               4U // 速度环：编码器测速，PI输出Iq给定
 #define AUX_POSITION            5U // 位置环：位置误差给速度环，速度环再给Iq
 #define AUX_USES_CURRENT_LOOP() ((aux_mode == AUX_CURRENT) || (aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
