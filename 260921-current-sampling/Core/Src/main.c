@@ -344,6 +344,32 @@ static void Monitor_Print(void)
     }
 }
 
+/* 编码器原始计数，每100ms打印一次。电机不上电，用手转轴观察。 */
+static void Encoder_Print(void)
+{
+    static uint32_t last_ms = 0, last_count = 0;
+    char line[96];
+    uint32_t now = HAL_GetTick(), count;
+    int32_t delta;
+    int length;
+
+    if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
+        return;
+    last_ms = now;
+
+    count = __HAL_TIM_GET_COUNTER(&htim2);
+    delta = (int32_t)(count - last_count); // 正转或反转由符号区分
+    last_count = count;
+
+    length = snprintf(line, sizeof(line), "enc_cnt=%lu enc_delta=%ld\r\n",
+                      (unsigned long)count, (long)delta);
+    if ((length > 0) && (length < (int)sizeof(line)))
+    {
+        (void)HAL_UART_Transmit(&huart1, (uint8_t *)line,
+                                (uint16_t)length, MONITOR_TX_TIMEOUT_MS);
+    }
+}
+
 /* USER CODE END 0 */
 
 /* 初始化外设，主循环处理按键和打印。 */
@@ -373,6 +399,7 @@ int main(void)
   MX_TIM8_Init();
   MX_USART1_UART_Init();
   MX_TIM5_Init();
+  MX_TIM2_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
@@ -380,6 +407,11 @@ int main(void)
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
   /* 启动霍尔捕获。 */
   if (HAL_TIMEx_HallSensor_Start_IT(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* 启动编码器计数，只观察，不参与控制。 */
+  if (HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL) != HAL_OK)
   {
     Error_Handler();
   }
@@ -438,6 +470,7 @@ int main(void)
     }
 
     Monitor_Print();
+    Encoder_Print();
     HAL_Delay(20); // 按键轮询间隔，ms
   }
   /* USER CODE END 3 */
