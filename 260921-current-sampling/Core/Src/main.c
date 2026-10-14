@@ -66,6 +66,20 @@
 #define CURRENT_REF_STEP_A      0.1f // 串口命令每次改变的电流给定，A
 #define ID_REF_MAX_A            1.0f // d轴电流给定上限，A
 #define IQ_REF_MAX_A            0.6f // q轴电流给定上限，A
+#define AUX_SPEED               4U // 速度环：编码器测速，PI输出Iq给定
+#define AUX_POSITION            5U // 位置环：位置误差给速度环，速度环再给Iq
+#define AUX_USES_CURRENT_LOOP() ((aux_mode == AUX_CURRENT) || (aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
+#define SPEED_LOOP_DIV          20U // 每20个PWM周期（1ms）算一次测速和速度环
+#define SPEED_WINDOW_STEPS      10U // 测速窗口：10次1ms，即10ms
+#define SPEED_RPM_PER_COUNT     (60.0f * 1000.0f / ((float)SPEED_WINDOW_STEPS * (float)ENCODER_COUNTS_PER_REV)) // 10ms内每个计数对应的rpm，1.5
+#define SPEED_PI_DT             0.001f // 速度环周期，s
+#define SPEED_PI_KP             0.003f // A/rpm；起点值，上板后调
+#define SPEED_PI_KI             0.1f   // A/(rpm*s)；积分要能克服约0.45A的静摩擦
+#define SPEED_REF_STEP_RPM      20.0f  // 串口命令每次改变的速度给定，rpm
+#define SPEED_REF_MAX_RPM       120.0f // 速度给定上限，rpm；1V时空载约150rpm
+#define POSITION_STEP_COUNTS    1000   // 串口命令每次改变的位置给定，计数，约90度机械角
+#define POSITION_KP             0.3f   // rpm/计数
+#define POSITION_SPEED_MAX_RPM  60.0f  // 位置环输出的速度上限，rpm
 #define HALL_PHASE_SHIFT_RAD   (HALL_PHASE_SHIFT_DEG * TWO_PI / 360.0f)
 #define HALL_STOP_TIMEOUT_MS   1000U     // 无边沿超时，ms
 #define MONITOR_PERIOD_MS      100U    // 打印间隔，ms
@@ -149,6 +163,15 @@ static volatile uint32_t enc_zero = 0;
 static volatile uint8_t enc_zero_valid = 0;
 static volatile uint8_t aux_mode = AUX_NONE;
 static volatile uint8_t drive_fault = 0; // 1=编码器换相超速，已停机
+/* 速度环、位置环：编码器测速，PI输出Iq给定。 */
+static volatile float speed_rpm = 0.0f;     // 编码器测速（10ms窗口），rpm
+static volatile float speed_ref_rpm = 0.0f; // 速度给定，rpm
+static volatile uint32_t position_ref = 0;  // 位置给定，编码器计数
+static volatile int32_t position_error = 0; // 位置误差，计数
+static float speed_integral_a = 0.0f;       // 速度环积分，A
+static uint8_t speed_started = 0;           // 测速历史是否已建立
+static volatile uint32_t speed_samples = 0; // 打印窗口内的测速次数
+static volatile float speed_sum = 0.0f, speed_sq = 0.0f, speed_min = 0.0f, speed_max = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -211,7 +234,7 @@ static void Current_PI_Update(void)
 {
     float error_d, error_q, vector_square, vector_scale;
 
-    current_pi_valid = ((motor_request != 0U) || (aux_mode == AUX_CURRENT)) && (park_angle_valid != 0U);
+    current_pi_valid = ((motor_request != 0U) || AUX_USES_CURRENT_LOOP()) && (park_angle_valid != 0U);
     if (current_pi_valid == 0U)
     {
         integral_d = integral_q = 0.0f; // 停止或角度无效时清积分
@@ -420,13 +443,80 @@ static uint8_t Serial_ReadCommand(void)
     return command;
 }
 
-/* 编码器原始计数、电角度，每100ms打印一次。 */
+/* 对称限幅。 */
+static float Clamp_Symmetric(float value, float limit)
+{
+    if (value > limit) return limit;
+    if (value < -limit) return -limit;
+    return value;
+}
+
+/* 每个PWM周期调用一次；每1ms（20个周期）测一次速，速度环和位置环也在这里算。
+ * 测速：当前计数减10ms前的计数。位置环：位置误差给速度给定；速度环：PI输出Iq给定，Id给定为0。 */
+static void Speed_Loop_Update(void)
+{
+    static uint8_t divider = 0, history_index = 0;
+    static uint32_t history[SPEED_WINDOW_STEPS];
+    uint32_t count, i;
+    float error, speed_target;
+
+    divider++;
+    if (divider < SPEED_LOOP_DIV)
+        return;
+    divider = 0;
+
+    count = __HAL_TIM_GET_COUNTER(&htim2);
+    if (speed_started == 0U)
+    {
+        for (i = 0; i < SPEED_WINDOW_STEPS; i++) history[i] = count; // 刚进入：历史填成当前位置，速度为0
+        history_index = 0;
+        speed_rpm = 0.0f;
+        speed_integral_a = 0.0f;
+        speed_started = 1;
+        return;
+    }
+    speed_rpm = (float)(int32_t)(count - history[history_index]) * SPEED_RPM_PER_COUNT;
+    history[history_index] = count;
+    history_index++;
+    if (history_index >= SPEED_WINDOW_STEPS) history_index = 0;
+
+    /* 打印窗口统计：平均、平方和、最小、最大。 */
+    if (speed_samples == 0U)
+    {
+        speed_min = speed_max = speed_rpm;
+    }
+    else
+    {
+        if (speed_rpm < speed_min) speed_min = speed_rpm;
+        if (speed_rpm > speed_max) speed_max = speed_rpm;
+    }
+    speed_sum += speed_rpm;
+    speed_sq += speed_rpm * speed_rpm;
+    speed_samples++;
+
+    if (aux_mode == AUX_ENC_SPIN)
+        return; // 编码器换相只测速，不闭环
+
+    if (aux_mode == AUX_POSITION)
+    {
+        position_error = (int32_t)(position_ref - count);
+        speed_target = Clamp_Symmetric(POSITION_KP * (float)position_error, POSITION_SPEED_MAX_RPM);
+        speed_ref_rpm = speed_target;
+    }
+    error = speed_ref_rpm - speed_rpm;
+    speed_integral_a = Clamp_Symmetric(speed_integral_a + SPEED_PI_KI * error * SPEED_PI_DT, IQ_REF_MAX_A);
+    Id_ref = 0.0f;
+    Iq_ref = Clamp_Symmetric(SPEED_PI_KP * error + speed_integral_a, IQ_REF_MAX_A);
+}
+
+/* 编码器计数、电角度、转速统计，每100ms打印一次。转速统计是上一个100ms内每1ms测速的结果。 */
 static void Encoder_Print(void)
 {
     static uint32_t last_ms = 0, last_count = 0;
-    char line[128];
-    uint32_t now = HAL_GetTick(), count;
-    int32_t delta;
+    char line[256];
+    uint32_t now = HAL_GetTick(), count, primask, samples;
+    int32_t delta, pos_err;
+    float mean = 0.0f, sd = 0.0f, low, high, ref, sum, sq;
     int length;
 
     if ((uint32_t)(now - last_ms) < MONITOR_PERIOD_MS)
@@ -437,11 +527,37 @@ static void Encoder_Print(void)
     delta = (int32_t)(count - last_count); // 正转或反转由符号区分
     last_count = count;
 
+    primask = __get_PRIMASK();
+    __disable_irq();
+    samples = speed_samples;
+    sum = speed_sum;
+    sq = speed_sq;
+    low = speed_min;
+    high = speed_max;
+    ref = speed_ref_rpm;
+    pos_err = position_error;
+    speed_samples = 0;
+    speed_sum = speed_sq = 0.0f;
+    __set_PRIMASK(primask);
+
+    if (samples != 0U)
+    {
+        mean = sum / (float)samples;
+        sd = sqrtf(fmaxf(sq / (float)samples - mean * mean, 0.0f));
+    }
+    else
+    {
+        low = high = 0.0f; // 没有测速时打印占位值
+    }
+
     length = snprintf(line, sizeof(line),
-        "enc_cnt=%lu enc_delta=%ld enc_ok=%u enc_e_mdeg=%ld aux=%u ref_d=%ld ref_q=%ld\r\n",
+        "enc_cnt=%lu enc_delta=%ld enc_ok=%u enc_e_mdeg=%ld aux=%u ref_d=%ld ref_q=%ld "
+        "spd_x10=%ld spd_sd_x10=%ld spd_min_x10=%ld spd_max_x10=%ld spd_ref_x10=%ld pos_err=%ld\r\n",
         (unsigned long)count, (long)delta, (unsigned)enc_zero_valid,
         (long)(Encoder_ElectricalAngle() * (360000.0f / TWO_PI)),
-        (unsigned)aux_mode, (long)(Id_ref * 1000.0f), (long)(Iq_ref * 1000.0f));
+        (unsigned)aux_mode, (long)(Id_ref * 1000.0f), (long)(Iq_ref * 1000.0f),
+        (long)(mean * 10.0f), (long)(sd * 10.0f), (long)(low * 10.0f),
+        (long)(high * 10.0f), (long)(ref * 10.0f), (long)pos_err);
     if ((length > 0) && (length < (int)sizeof(line)))
     {
         (void)HAL_UART_Transmit(&huart1, (uint8_t *)line,
@@ -453,6 +569,7 @@ static void Encoder_Print(void)
 static void Drive_AuxUpdate(void)
 {
     static uint8_t key2_armed = 0, key3_armed = 0, checked = 0;
+    static uint32_t position_home = 0; // 进入位置环时的计数，'0'命令回到这里
     static uint32_t start_ms = 0, check_count = 0;
     char line[96];
     uint32_t now = HAL_GetTick(), count;
@@ -461,6 +578,8 @@ static void Drive_AuxUpdate(void)
     uint8_t align_event = (command == 'a') ? 1U : 0U;
     uint8_t spin_event = (command == 'v') ? 1U : 0U;
     uint8_t current_event = (command == 'c') ? 1U : 0U;
+    uint8_t speed_event = (command == 's') ? 1U : 0U;
+    uint8_t position_event = (command == 'g') ? 1U : 0U;
     uint8_t calibrated = ((adc_u_offset_ready != 0U) && (adc_v_offset_ready != 0U)) ? 1U : 0U;
     int length;
 
@@ -498,6 +617,22 @@ static void Drive_AuxUpdate(void)
         if (Id_ref < -ID_REF_MAX_A) Id_ref = -ID_REF_MAX_A;
     }
 
+    /* 速度环运行中：u/j改速度给定，0清零，每次20rpm。 */
+    if (aux_mode == AUX_SPEED)
+    {
+        if (command == 'u') speed_ref_rpm += SPEED_REF_STEP_RPM;
+        else if (command == 'j') speed_ref_rpm -= SPEED_REF_STEP_RPM;
+        else if (command == '0') speed_ref_rpm = 0.0f;
+        speed_ref_rpm = Clamp_Symmetric(speed_ref_rpm, SPEED_REF_MAX_RPM);
+    }
+    /* 位置环运行中：u/j改位置给定，每次1000计数，0回到起点。 */
+    if (aux_mode == AUX_POSITION)
+    {
+        if (command == 'u') position_ref += (uint32_t)POSITION_STEP_COUNTS;
+        else if (command == 'j') position_ref -= (uint32_t)POSITION_STEP_COUNTS;
+        else if (command == '0') position_ref = position_home;
+    }
+
     if (command == 'p')
     {
         Print_Text("pong\r\n");
@@ -514,7 +649,8 @@ static void Drive_AuxUpdate(void)
         motor_request = 0;
         Print_Text("stop\r\n");
     }
-    else if ((align_event != 0U) || (spin_event != 0U) || (current_event != 0U))
+    else if ((align_event != 0U) || (spin_event != 0U) || (current_event != 0U) ||
+             (speed_event != 0U) || (position_event != 0U))
     {
         if (aux_mode != AUX_NONE)
         {
@@ -543,7 +679,27 @@ static void Drive_AuxUpdate(void)
             aux_mode = AUX_ENC_SPIN;
             Print_Text("spin start\r\n");
         }
-        else
+        else if (speed_event != 0U)
+        {
+            Id_ref = 0.0f;
+            Iq_ref = 0.0f;
+            speed_ref_rpm = 0.0f;
+            start_ms = now;
+            aux_mode = AUX_SPEED;
+            Print_Text("speed start\r\n");
+        }
+        else if (position_event != 0U)
+        {
+            Id_ref = 0.0f;
+            Iq_ref = 0.0f;
+            speed_ref_rpm = 0.0f;
+            position_home = __HAL_TIM_GET_COUNTER(&htim2);
+            position_ref = position_home;
+            start_ms = now;
+            aux_mode = AUX_POSITION;
+            Print_Text("position start\r\n");
+        }
+        else if (current_event != 0U)
         {
             Id_ref = 0.0f; // 电流环从零给定开始，再用串口命令调整
             Iq_ref = 0.0f;
@@ -583,7 +739,7 @@ static void Drive_AuxUpdate(void)
             }
         }
     }
-    else if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_CURRENT))
+    else if ((aux_mode == AUX_ENC_SPIN) || AUX_USES_CURRENT_LOOP())
     {
         if ((uint32_t)(now - start_ms) >= ENC_SPIN_MAX_MS)
         {
@@ -945,7 +1101,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         Hall_AngleUpdate(); // 独立观察霍尔角度
 
         /* 编码器换相超速保护：相邻两个PWM周期计数变化太大就停机。 */
-        if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_CURRENT))
+        if ((aux_mode == AUX_ENC_SPIN) || AUX_USES_CURRENT_LOOP())
         {
             uint32_t count = __HAL_TIM_GET_COUNTER(&htim2);
             int32_t step = (int32_t)(count - spin_last_count);
@@ -962,6 +1118,16 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         else
         {
             spin_started = 0;
+        }
+
+        /* 编码器测速；速度环、位置环在其中每1ms算一次，输出Iq给定。 */
+        if ((aux_mode == AUX_ENC_SPIN) || (aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
+        {
+            Speed_Loop_Update();
+        }
+        else
+        {
+            speed_started = 0;
         }
 
         if (((motor_request == 0) && (aux_mode == AUX_NONE)) ||
@@ -1008,12 +1174,12 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 			    if (theta >= TWO_PI) theta -= TWO_PI;
 			    vmag = ENC_SPIN_VOLTAGE_V;
 			}
-			else if (aux_mode == AUX_CURRENT)
+			else if (AUX_USES_CURRENT_LOOP())
 			{
 				angle_now = Encoder_ElectricalAngle(); // 逆Park用同一个编码器角度
 			}
 
-			if (aux_mode == AUX_CURRENT)
+			if (AUX_USES_CURRENT_LOOP())
 			{
 				/* 逆Park：PI输出的Ud、Uq变成静止两轴电压。 */
 				Ualpha = Ud * cosf(angle_now) - Uq * sinf(angle_now);
