@@ -70,8 +70,8 @@
 #define AUX_POSITION            5U // 位置环：位置误差给速度环，速度环再给Iq
 #define AUX_USES_CURRENT_LOOP() ((aux_mode == AUX_CURRENT) || (aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
 #define SPEED_LOOP_DIV          20U // 每20个PWM周期（1ms）算一次测速和速度环
-#define SPEED_WINDOW_STEPS      10U // 测速窗口：10次1ms，即10ms
-#define SPEED_RPM_PER_COUNT     (60.0f * 1000.0f / ((float)SPEED_WINDOW_STEPS * (float)ENCODER_COUNTS_PER_REV)) // 10ms内每个计数对应的rpm，1.5
+#define SPEED_WINDOW_STEPS      5U // 测速窗口：5次1ms，即5ms，分辨率3rpm
+#define SPEED_RPM_PER_COUNT     (60.0f * 1000.0f / ((float)SPEED_WINDOW_STEPS * (float)ENCODER_COUNTS_PER_REV)) // 窗口内每个计数对应的rpm
 #define SPEED_PI_DT             0.001f // 速度环周期，s
 #define SPEED_PI_KP             0.003f // A/rpm；起点值，上板后调
 #define SPEED_PI_KI             0.1f   // A/(rpm*s)；积分要能克服约0.45A的静摩擦
@@ -169,6 +169,7 @@ static volatile float speed_ref_rpm = 0.0f; // 速度给定，rpm
 static volatile uint32_t position_ref = 0;  // 位置给定，编码器计数
 static volatile int32_t position_error = 0; // 位置误差，计数
 static float speed_integral_a = 0.0f;       // 速度环积分，A
+static volatile float speed_kp = SPEED_PI_KP, speed_ki = SPEED_PI_KI, position_kp = POSITION_KP; // 串口可调
 static uint8_t speed_started = 0;           // 测速历史是否已建立
 static volatile uint32_t speed_samples = 0; // 打印窗口内的测速次数
 static volatile float speed_sum = 0.0f, speed_sq = 0.0f, speed_min = 0.0f, speed_max = 0.0f;
@@ -500,13 +501,13 @@ static void Speed_Loop_Update(void)
     if (aux_mode == AUX_POSITION)
     {
         position_error = (int32_t)(position_ref - count);
-        speed_target = Clamp_Symmetric(POSITION_KP * (float)position_error, POSITION_SPEED_MAX_RPM);
+        speed_target = Clamp_Symmetric(position_kp * (float)position_error, POSITION_SPEED_MAX_RPM);
         speed_ref_rpm = speed_target;
     }
     error = speed_ref_rpm - speed_rpm;
-    speed_integral_a = Clamp_Symmetric(speed_integral_a + SPEED_PI_KI * error * SPEED_PI_DT, IQ_REF_MAX_A);
+    speed_integral_a = Clamp_Symmetric(speed_integral_a + speed_ki * error * SPEED_PI_DT, IQ_REF_MAX_A);
     Id_ref = 0.0f;
-    Iq_ref = Clamp_Symmetric(SPEED_PI_KP * error + speed_integral_a, IQ_REF_MAX_A);
+    Iq_ref = Clamp_Symmetric(speed_kp * error + speed_integral_a, IQ_REF_MAX_A);
 }
 
 /* 编码器计数、电角度、转速统计，每100ms打印一次。转速统计是上一个100ms内每1ms测速的结果。 */
@@ -631,6 +632,29 @@ static void Drive_AuxUpdate(void)
         if (command == 'u') position_ref += (uint32_t)POSITION_STEP_COUNTS;
         else if (command == 'j') position_ref -= (uint32_t)POSITION_STEP_COUNTS;
         else if (command == '0') position_ref = position_home;
+    }
+
+    /* 速度环、位置环运行中调参：e/d速度环Kp，r/f速度环Ki，t/y位置环Kp，每次乘或除1.5。 */
+    if ((aux_mode == AUX_SPEED) || (aux_mode == AUX_POSITION))
+    {
+        uint8_t gain_changed = 1U;
+
+        if (command == 'e') speed_kp *= 1.5f;
+        else if (command == 'd') speed_kp /= 1.5f;
+        else if (command == 'r') speed_ki *= 1.5f;
+        else if (command == 'f') speed_ki /= 1.5f;
+        else if (command == 't') position_kp *= 1.5f;
+        else if (command == 'y') position_kp /= 1.5f;
+        else gain_changed = 0U;
+        if (gain_changed != 0U)
+        {
+            length = snprintf(line, sizeof(line), "gain speed_kp_x1e4=%ld speed_ki_x1e3=%ld pos_kp_x1e3=%ld\r\n",
+                              (long)(speed_kp * 10000.0f), (long)(speed_ki * 1000.0f), (long)(position_kp * 1000.0f));
+            if ((length > 0) && (length < (int)sizeof(line)))
+            {
+                Print_Text(line);
+            }
+        }
     }
 
     if (command == 'p')
