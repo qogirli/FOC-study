@@ -401,6 +401,7 @@ int main(void)
   MX_TIM5_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   /* 上电关闭驱动。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
