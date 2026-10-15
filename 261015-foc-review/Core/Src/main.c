@@ -64,7 +64,7 @@
 /* 开环设定：你改这三个值就能改变转动。 */
 float frequency = 1.0f;        // 电频率，Hz（电角度每秒转几圈）
 float voltage   = 1.0f;        // 电压矢量大小，V（大小决定力矩）
-float Udc       = 18.0f;       // 母线电压，V
+float Udc       = 12.0f;       // 母线电压，V（要和实际供电一致，现在用 12 V）
 
 volatile float theta = 0.0f;   // 电压矢量的方向（电角度），rad
 volatile float Ualpha = 0.0f;  // 电压矢量在 alpha 轴的分量，V
