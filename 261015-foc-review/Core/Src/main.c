@@ -84,9 +84,13 @@ volatile uint8_t offset_ready = 0;        // 零偏校准完成标志
 volatile float current_u = 0.0f;          // U 相电流，A
 volatile float current_v = 0.0f;          // V 相电流，A
 volatile float current_w = 0.0f;          // W 相电流，A（没有测，由 U、V 算出）
+volatile float current_alpha = 0.0f;      // Clarke 变换后：静止两轴电流，A
+volatile float current_beta  = 0.0f;
+volatile float current_d = 0.0f;          // Park 变换后：旋转两轴电流，A
+volatile float current_q = 0.0f;
 
 /* 打印用的累加：每个打印周期取平均。 */
-static float sum_u = 0.0f, sum_v = 0.0f;
+static float sum_u = 0.0f, sum_v = 0.0f, sum_d = 0.0f, sum_q = 0.0f;
 static uint32_t sum_n = 0;
 
 /* USER CODE END PV */
@@ -155,6 +159,25 @@ static float ADC_ToCurrent(uint16_t raw, float offset)
     return CURRENT_SIGN * volts / AMP_GAIN / SHUNT_OHM;
 }
 
+/* Clarke：三相电流（只用 U、V，W 由 U+V+W=0 得到）变成静止两轴 alpha、beta。
+ * alpha 轴和 U 相重合。 */
+static void Clarke_Update(float iu, float iv)
+{
+    current_alpha = iu;
+    current_beta  = (iu + 2.0f * iv) / SQRT_3;
+}
+
+/* Park：静止两轴变成跟着转子转的两轴 d、q。angle 是 d 轴当前的方向。
+ * 现在还没有转子角度，先用开环的电压矢量方向 theta 代替。 */
+static void Park_Update(float alpha, float beta, float angle)
+{
+    float sin_angle = sinf(angle);
+    float cos_angle = cosf(angle);
+
+    current_d =  alpha * cos_angle + beta * sin_angle;
+    current_q = -alpha * sin_angle + beta * cos_angle;
+}
+
 /* 上电后在驱动关闭、电流为零时，平均若干次读数，得到零电流对应的读数。 */
 static void Offset_Calibrate(uint16_t u, uint16_t v)
 {
@@ -174,12 +197,12 @@ static void Offset_Calibrate(uint16_t u, uint16_t v)
     }
 }
 
-/* 每秒 5 次从串口打印窗口内的平均电流。 */
+/* 每秒 5 次从串口打印窗口内的平均电流（Id、Iq 平均后更稳定）。 */
 static void Print_Currents(void)
 {
     static uint32_t last_ms = 0;
-    char line[96];
-    float iu, iv;
+    char line[128];
+    float iu, iv, id, iq;
     uint32_t n;
     int len;
 
@@ -191,19 +214,24 @@ static void Print_Currents(void)
     n = sum_n;
     iu = sum_u;
     iv = sum_v;
+    id = sum_d;
+    iq = sum_q;
     sum_n = 0;
-    sum_u = sum_v = 0.0f;
+    sum_u = sum_v = sum_d = sum_q = 0.0f;
     __enable_irq();
 
     if (n != 0U)
     {
         iu /= (float)n;
         iv /= (float)n;
+        id /= (float)n;
+        iq /= (float)n;
     }
     len = snprintf(line, sizeof(line),
-        "cal=%u raw_u=%u raw_v=%u Iu_mA=%ld Iv_mA=%ld\r\n",
+        "cal=%u raw_u=%u raw_v=%u Iu_mA=%ld Iv_mA=%ld Id_mA=%ld Iq_mA=%ld\r\n",
         (unsigned)offset_ready, (unsigned)raw_u, (unsigned)raw_v,
-        (long)(iu * 1000.0f), (long)(iv * 1000.0f));
+        (long)(iu * 1000.0f), (long)(iv * 1000.0f),
+        (long)(id * 1000.0f), (long)(iq * 1000.0f));
     HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)len, 5);
 }
 /* USER CODE END 0 */
@@ -401,8 +429,13 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     current_v = ADC_ToCurrent(raw_v, offset_v);
     current_w = -current_u - current_v; // 三相电流之和为零
 
+    Clarke_Update(current_u, current_v);
+    Park_Update(current_alpha, current_beta, theta);
+
     sum_u += current_u;
     sum_v += current_v;
+    sum_d += current_d;
+    sum_q += current_q;
     sum_n++;
 }
 
