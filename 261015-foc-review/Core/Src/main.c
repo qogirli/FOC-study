@@ -40,7 +40,6 @@
 #define SQRT_3                 1.7320508f
 #define SIN_60                 0.8660254f // sqrt(3) / 2
 #define COS_60                 0.5f
-#define PWM_HZ                 20000.0f   // PWM 周期中断频率，每个周期算一次
 
 /* 电流采样：ADC 读到的是电压，要换算成电流。 */
 #define ADC_VREF_V             3.3f       // ADC 参考电压，V
@@ -51,6 +50,17 @@
 #define CAL_SKIP_SAMPLES       2000U      // 上电后先丢掉前 2000 个（0.1 s），等电路稳定
 #define CAL_AVG_SAMPLES        256U       // 再平均 256 个，得到零电流时的读数
 #define PRINT_PERIOD_MS        200U       // 串口打印间隔
+
+/* 编码器和电机：电角度 = 机械角度 × 极对数。 */
+#define ENC_COUNTS_PER_REV     4000       // 1000 线 × 4 倍频，机械转一圈的计数
+#define POLE_PAIRS             4          // 电机极对数
+#define ENC_COUNTS_PER_ELEC    (ENC_COUNTS_PER_REV / POLE_PAIRS) // 电角度转一圈的计数（1000）
+
+/* 对零：电压矢量固定在 0 度，转子会被吸过来，此时转子 d 轴 = 0 度。 */
+#define ALIGN_VOLTAGE_V        0.6f       // 对零电压，V
+#define ALIGN_KICK_MS          600U       // 先向两侧各推 90 度的时间
+#define ALIGN_SETTLE_MS        800U       // 回到 0 度后等转子停稳的时间
+#define ALIGN_MAX_SPREAD       120        // 两次停点相差超过这个计数就认为对零失败
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -61,10 +71,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* 开环设定：你改这三个值就能改变转动。 */
-float frequency = 1.0f;        // 电频率，Hz（电角度每秒转几圈）
-float voltage   = 1.0f;        // 电压矢量大小，V（大小决定力矩）
+/* 设定：电压矢量的大小决定力矩。 */
+float voltage   = 1.0f;        // 转动时的电压矢量大小，V
 float Udc       = 12.0f;       // 母线电压，V（要和实际供电一致，现在用 12 V）
+
+/* 运行状态：按键切换。 */
+#define MODE_OFF               0U // 驱动关闭
+#define MODE_ALIGN             1U // 对零：电压矢量固定在 align_theta
+#define MODE_RUN               2U // 运转：电压矢量始终在转子磁极前面 90 度
+volatile uint8_t drive_mode = MODE_OFF;
+
+volatile float align_theta = 0.0f;  // 对零时电压矢量的固定方向，rad
+uint32_t enc_zero = 0;              // 转子 d 轴对应的编码器计数
+volatile uint8_t enc_zero_valid = 0;// 对零成功标志
 
 volatile float theta = 0.0f;   // 电压矢量的方向（电角度），rad
 volatile float Ualpha = 0.0f;  // 电压矢量在 alpha 轴的分量，V
@@ -75,7 +94,6 @@ volatile uint8_t sector;       // 电压矢量落在第几个扇区（1~6）
 volatile float Tx, Ty, T0;     // 两个相邻有效矢量和零矢量占一个 PWM 周期的比例
 volatile float dutyA, dutyB, dutyC; // 三相上桥臂占空比，0~1
 
-volatile uint8_t motor_request = 0; // 按键切换：0 停止，1 运行
 
 /* 电流采样结果。 */
 volatile uint16_t raw_u = 0, raw_v = 0;   // ADC 原始读数（0~4095）
@@ -90,7 +108,7 @@ volatile float current_d = 0.0f;          // Park 变换后：旋转两轴电流
 volatile float current_q = 0.0f;
 
 /* 打印用的累加：每个打印周期取平均。 */
-static float sum_u = 0.0f, sum_v = 0.0f, sum_d = 0.0f, sum_q = 0.0f;
+static float sum_d = 0.0f, sum_q = 0.0f;
 static uint32_t sum_n = 0;
 
 /* USER CODE END PV */
@@ -152,6 +170,48 @@ static void SVPWM_Update(float ualpha, float ubeta)
     __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3,
             (uint32_t)(dutyC * __HAL_TIM_GET_AUTORELOAD(&htim8)));
 }
+/* 转子电角度：编码器计数减去 d 轴零点，对 1000 取余（电角度转一圈 1000 个计数），换成弧度。 */
+static float Encoder_ElectricalAngle(void)
+{
+    int32_t rel = (int32_t)(__HAL_TIM_GET_COUNTER(&htim2) - enc_zero);
+
+    rel %= ENC_COUNTS_PER_ELEC;
+    if (rel < 0) rel += ENC_COUNTS_PER_ELEC;
+    return TWO_PI * (float)rel / (float)ENC_COUNTS_PER_ELEC;
+}
+
+/* 对零（主循环里调用，会等几秒）：
+ * 电压矢量固定在 0 度，转子被吸到 d 轴对齐的位置，记下此时的计数。
+ * 只推一次，静摩擦大时转子可能停在偏一点的位置，甚至 180 度反着停。
+ * 所以先把矢量转到 +90 度再回 0 度，记一次停点；再转到 -90 度回 0 度，再记一次，
+ * 两个停点一边偏多、一边偏少，取平均就是 d 轴零点。 */
+static void Encoder_Align(void)
+{
+    uint32_t stop[2];
+    int32_t spread;
+    int i;
+
+    enc_zero_valid = 0;
+    drive_mode = MODE_ALIGN;
+    for (i = 0; i < 2; i++)
+    {
+        align_theta = (i == 0) ? (TWO_PI / 4.0f) : (-TWO_PI / 4.0f);
+        HAL_Delay(ALIGN_KICK_MS);
+        align_theta = 0.0f;
+        HAL_Delay(ALIGN_SETTLE_MS);
+        stop[i] = __HAL_TIM_GET_COUNTER(&htim2);
+    }
+
+    spread = (int32_t)(stop[1] - stop[0]);
+    if ((spread > ALIGN_MAX_SPREAD) || (spread < -ALIGN_MAX_SPREAD))
+    {
+        drive_mode = MODE_OFF; // 两次停点差太多，说明没对好，不运转
+        return;
+    }
+    enc_zero = stop[0] + (uint32_t)(spread / 2);
+    enc_zero_valid = 1;
+}
+
 /* ADC 读数减零偏，再换算成电流：读数 → 电压 → 除以放大倍数 → 除以采样电阻。 */
 static float ADC_ToCurrent(uint16_t raw, float offset)
 {
@@ -168,7 +228,7 @@ static void Clarke_Update(float iu, float iv)
 }
 
 /* Park：静止两轴变成跟着转子转的两轴 d、q。angle 是 d 轴当前的方向。
- * 现在还没有转子角度，先用开环的电压矢量方向 theta 代替。 */
+ * 这里用的是转子电角度（编码器给出，对零后 0 度就是 d 轴方向）。 */
 static void Park_Update(float alpha, float beta, float angle)
 {
     float sin_angle = sinf(angle);
@@ -197,12 +257,12 @@ static void Offset_Calibrate(uint16_t u, uint16_t v)
     }
 }
 
-/* 每秒 5 次从串口打印窗口内的平均电流（Id、Iq 平均后更稳定）。 */
+/* 每秒 5 次从串口打印：状态、编码器计数、转子电角度、窗口内平均的 Id、Iq。 */
 static void Print_Currents(void)
 {
     static uint32_t last_ms = 0;
     char line[128];
-    float iu, iv, id, iq;
+    float id, iq;
     uint32_t n;
     int len;
 
@@ -212,25 +272,22 @@ static void Print_Currents(void)
     /* 暂停中断，取出累加值并清零。 */
     __disable_irq();
     n = sum_n;
-    iu = sum_u;
-    iv = sum_v;
     id = sum_d;
     iq = sum_q;
     sum_n = 0;
-    sum_u = sum_v = sum_d = sum_q = 0.0f;
+    sum_d = sum_q = 0.0f;
     __enable_irq();
 
     if (n != 0U)
     {
-        iu /= (float)n;
-        iv /= (float)n;
         id /= (float)n;
         iq /= (float)n;
     }
     len = snprintf(line, sizeof(line),
-        "cal=%u raw_u=%u raw_v=%u Iu_mA=%ld Iv_mA=%ld Id_mA=%ld Iq_mA=%ld\r\n",
-        (unsigned)offset_ready, (unsigned)raw_u, (unsigned)raw_v,
-        (long)(iu * 1000.0f), (long)(iv * 1000.0f),
+        "mode=%u zero_ok=%u cnt=%lu ang_deg=%ld Id_mA=%ld Iq_mA=%ld\r\n",
+        (unsigned)drive_mode, (unsigned)enc_zero_valid,
+        (unsigned long)__HAL_TIM_GET_COUNTER(&htim2),
+        (long)(Encoder_ElectricalAngle() * 360.0f / TWO_PI),
         (long)(id * 1000.0f), (long)(iq * 1000.0f));
     HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)len, 5);
 }
@@ -269,9 +326,13 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   /* 上电先关驱动（MOTOR_EN 低电平）。校准零偏时电机必须没有电流。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
+
+  /* 编码器开始计数（A、B 相接 PA15、PB3，TIM2 硬件自动数）。 */
+  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 
   /* ADC 开始等待触发：每次 TIM8 通道 4 到点，U 相和 V 相同时采一次。 */
   HAL_ADCEx_InjectedStart_IT(&hadc1);
@@ -297,13 +358,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* KEY1：松开后再按下，切换启停。 */
+    /* KEY1：松开后再按下。停止时按：先对零再运转；运转时按：停止。 */
     static uint8_t key_armed = 0;
 
     if (offset_ready == 0)
     {
         /* 零偏没校准完，不允许启动。 */
-        motor_request = 0;
+        drive_mode = MODE_OFF;
         key_armed = 0;
     }
     else if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
@@ -313,7 +374,15 @@ int main(void)
     else if (key_armed == 1)
     {
         key_armed = 0;
-        motor_request = !motor_request;
+        if (drive_mode == MODE_OFF)
+        {
+            Encoder_Align();               // 成功后 drive_mode 变成 MODE_ALIGN，下面转入运转
+            if (enc_zero_valid != 0U) drive_mode = MODE_RUN;
+        }
+        else
+        {
+            drive_mode = MODE_OFF;
+        }
     }
 
     Print_Currents();
@@ -364,6 +433,8 @@ void SystemClock_Config(void)
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
     static uint8_t pwm_prepared = 0;
+    uint8_t mode = drive_mode;
+    float vmag;
 
     if ((htim->Instance != TIM8) ||
         (htim->Channel != HAL_TIM_ACTIVE_CHANNEL_4))
@@ -371,33 +442,43 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
         return;
     }
 
-    if (motor_request == 0)
+    if (mode == MODE_OFF)
     {
-        /* 停止：关驱动，角度回零。 */
+        /* 停止：关驱动。 */
         HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
         pwm_prepared = 0;
-        theta = 0.0f;
         return;
+    }
+
+    if (mode == MODE_ALIGN)
+    {
+        /* 对零：矢量固定在 align_theta，电压小一点。 */
+        theta = align_theta;
+        vmag = ALIGN_VOLTAGE_V;
+    }
+    else
+    {
+        /* 运转：矢量始终在转子磁极（d 轴）前面 90 度，也就是只有 q 轴电压。 */
+        theta = Encoder_ElectricalAngle() + TWO_PI / 4.0f;
+        if (theta >= TWO_PI) theta -= TWO_PI;
+        vmag = voltage;
     }
 
     if (pwm_prepared == 0)
     {
         /* 第一个周期先算好 CCR，驱动仍然关着，避免一上来输出乱波形。 */
         HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
-        theta = 0.0f;
         pwm_prepared = 1;
     }
     else
     {
-        /* CCR 已经装载，开驱动，并让电压矢量转一小步。 */
+        /* CCR 已经装载，开驱动。 */
         HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_SET);
-        theta += TWO_PI * frequency / PWM_HZ;
-        if (theta >= TWO_PI) theta -= TWO_PI;
     }
 
     /* 矢量 = 大小 × (cos 方向, sin 方向)，交给 SVPWM。 */
-    Ualpha = voltage * cosf(theta);
-    Ubeta  = voltage * sinf(theta);
+    Ualpha = vmag * cosf(theta);
+    Ubeta  = vmag * sinf(theta);
     SVPWM_Update(Ualpha, Ubeta);
 }
 
@@ -430,10 +511,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     current_w = -current_u - current_v; // 三相电流之和为零
 
     Clarke_Update(current_u, current_v);
-    Park_Update(current_alpha, current_beta, theta);
+    Park_Update(current_alpha, current_beta, Encoder_ElectricalAngle());
 
-    sum_u += current_u;
-    sum_v += current_v;
     sum_d += current_d;
     sum_q += current_q;
     sum_n++;
