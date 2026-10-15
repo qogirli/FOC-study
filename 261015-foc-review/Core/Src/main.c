@@ -80,6 +80,7 @@ float Udc       = 12.0f;       // 母线电压，V（要和实际供电一致，
 #define MODE_ALIGN             1U // 对零：电压矢量固定在 align_theta
 #define MODE_RUN               2U // 运转：电压矢量始终在转子磁极前面 90 度
 volatile uint8_t drive_mode = MODE_OFF;
+volatile uint8_t key_sw = 0;   // 调试时在 Watch 窗口里写 1，等于按一下 KEY1
 
 volatile float align_theta = 0.0f;  // 对零时电压矢量的固定方向，rad
 uint32_t enc_zero = 0;              // 转子 d 轴对应的编码器计数
@@ -358,30 +359,45 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* KEY1：松开后再按下。停止时按：先对零再运转；运转时按：停止。 */
+    /* KEY1：松开后再按下算一次按键。停止时按：先对零再运转；运转时按：停止。 */
     static uint8_t key_armed = 0;
+    uint8_t pressed = 0;
 
     if (offset_ready == 0)
     {
         /* 零偏没校准完，不允许启动。 */
         drive_mode = MODE_OFF;
         key_armed = 0;
+        key_sw = 0;
     }
-    else if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
+    else
     {
-        key_armed = 1;
-    }
-    else if (key_armed == 1)
-    {
-        key_armed = 0;
-        if (drive_mode == MODE_OFF)
+        if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
         {
-            Encoder_Align();               // 成功后 drive_mode 变成 MODE_ALIGN，下面转入运转
-            if (enc_zero_valid != 0U) drive_mode = MODE_RUN;
+            key_armed = 1;
         }
-        else
+        else if (key_armed == 1)
         {
-            drive_mode = MODE_OFF;
+            key_armed = 0;
+            pressed = 1;
+        }
+        if (key_sw != 0U)
+        {
+            key_sw = 0;
+            pressed = 1;
+        }
+
+        if (pressed != 0U)
+        {
+            if (drive_mode == MODE_OFF)
+            {
+                Encoder_Align();
+                if (enc_zero_valid != 0U) drive_mode = MODE_RUN;
+            }
+            else
+            {
+                drive_mode = MODE_OFF;
+            }
         }
     }
 
