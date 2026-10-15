@@ -25,6 +25,24 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+/* ========================= 阅读地图（从上往下读这个文件）=========================
+ * CubeMX 生成的框架（文件头、main 里的 Init、SystemClock_Config、Error_Handler）可以跳过，
+ * 只读 USER CODE 之间的内容。用 Ctrl+F 搜函数名。
+ *
+ * 【主线】面试要能讲清楚的：
+ *   1. 变量和设定            搜 PV：电压、母线电压、运行状态
+ *   2. SVPWM_Update          电压矢量 (Ualpha, Ubeta) → 三相占空比 → 三个 CCR
+ *   3. Encoder_ElectricalAngle  编码器计数 → 转子电角度
+ *   4. ADC_ToCurrent、Offset_Calibrate   ADC 读数 → 电流，上电零偏校准
+ *   5. Clarke_Update、Park_Update        三相电流 → alpha、beta → d、q
+ *   6. HAL_ADCEx_InjectedConvCpltCallback  每个 PWM 周期采一次电流，然后 Clarke、Park
+ *   7. HAL_TIM_PWM_PulseFinishedCallback   每个 PWM 周期：定电压矢量方向 → SVPWM
+ *   8. Encoder_Align         对零（找编码器零点和转子磁极的偏差）
+ *
+ * 【支线】可以不细读，面试很少问：
+ *   - Print_Currents        串口打印，调试用
+ *   - key_sw 和主循环里的按键判断   启停，调试用
+ * ============================================================================== */
 #include <math.h>
 #include <stdio.h>
 /* USER CODE END Includes */
