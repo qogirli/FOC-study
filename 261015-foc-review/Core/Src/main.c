@@ -35,7 +35,7 @@
  *   3. Encoder_ElectricalAngle  编码器计数 → 转子电角度
  *   4. ADC_ToCurrent、Offset_Calibrate   ADC 读数 → 电流，上电零偏校准
  *   5. Clarke_Update、Park_Update        三相电流 → alpha、beta → d、q
- *   6. Current_PI_Update、InversePark_Update   电流环：PI 算 Ud、Uq，逆 Park 变回 alpha、beta
+ *   6. PI_Run、Current_PI_Update、InversePark_Update   电流环：PI 算 Ud、Uq，逆 Park 变回 alpha、beta
  *   7. Speed_Loop_Update     速度环和位置环：位置误差 → 转速给定 → PI → Iq 给定（每 1 ms 一次）
  *   8. HAL_ADCEx_InjectedConvCpltCallback  每个 PWM 周期采一次电流 → Clarke → Park → 速度环 → 电流环 PI
  *   9. HAL_TIM_PWM_PulseFinishedCallback   每个 PWM 周期：逆 Park → SVPWM → 写 CCR
@@ -128,7 +128,6 @@ volatile uint8_t ctrl_mode = CTRL_SPEED;
 float speed_ref_rpm = 60.0f;       // 速度给定，rpm（正数正转）
 volatile uint32_t position_ref = 0;// 位置给定，编码器计数（4000 = 机械转一圈）；不运转时自动跟着当前位置
 volatile float speed_rpm = 0.0f;   // 测出来的转速，rpm
-static float speed_integral = 0.0f;// 速度环的积分项，A
 volatile uint8_t key_sw = 0;   // 调试时在 Watch 窗口里写 1，等于按一下 KEY1
 
 volatile float align_theta = 0.0f;  // 对零时电压矢量的固定方向，rad
@@ -160,8 +159,18 @@ volatile float current_q = 0.0f;
 /* 电流环输出。 */
 volatile float Ud = 0.0f;                 // d 轴电压指令，V
 volatile float Uq = 0.0f;                 // q 轴电压指令，V
-static float integral_d = 0.0f;           // PI 的积分项，V
-static float integral_q = 0.0f;
+
+/* PI 控制器：电流环的 d 轴、q 轴和速度环用同一份代码，各自一个结构体存自己的参数和积分项。 */
+typedef struct {
+    float kp;        // 比例系数
+    float ki;        // 积分系数
+    float limit;     // 输出和积分项的上限
+    float integral;  // 积分项
+    float out;       // 本次输出
+} PI_t;
+PI_t pi_id    = { CURRENT_PI_KP, CURRENT_PI_KI, CURRENT_PI_LIMIT_V, 0.0f, 0.0f }; // 输出 Ud，V
+PI_t pi_iq    = { CURRENT_PI_KP, CURRENT_PI_KI, CURRENT_PI_LIMIT_V, 0.0f, 0.0f }; // 输出 Uq，V
+PI_t pi_speed = { SPEED_PI_KP,   SPEED_PI_KI,   IQ_REF_MAX_A,       0.0f, 0.0f }; // 输出 Iq 给定，A
 
 /* 打印用的累加：每个打印周期取平均。 */
 static float sum_d = 0.0f, sum_q = 0.0f, sum_ud = 0.0f, sum_uq = 0.0f;
@@ -302,28 +311,36 @@ static float Clamp(float value, float limit)
     return value;
 }
 
+/* PI 控制器：输入误差（给定 − 测量）和两次计算的间隔 dt，返回输出。
+ * 输出 = Kp × 误差 + 积分项；积分项每次加 Ki × 误差 × dt，并且限幅，防止积分越积越大。 */
+static float PI_Run(PI_t *pi, float error, float dt)
+{
+    pi->integral = Clamp(pi->integral + pi->ki * error * dt, pi->limit);
+    pi->out = Clamp(pi->kp * error + pi->integral, pi->limit);
+    return pi->out;
+}
+
+/* 积分项和输出清零，下次启动从零开始。 */
+static void PI_Reset(PI_t *pi)
+{
+    pi->integral = 0.0f;
+    pi->out = 0.0f;
+}
+
 /* 电流环：Id、Iq 各一个 PI。输入给定和测量的差，输出要加的电压 Ud、Uq。
- * 输出 = Kp × 误差 + 积分项；积分项每次加 Ki × 误差 × 时间，并且限幅，防止积分越积越大。
- * 不在运转状态时清零，下次启动从零开始。 */
+ * 不在运转状态时清零。 */
 static void Current_PI_Update(void)
 {
-    float error_d, error_q;
-
     if (drive_mode != MODE_RUN)
     {
-        integral_d = integral_q = 0.0f;
+        PI_Reset(&pi_id);
+        PI_Reset(&pi_iq);
         Ud = Uq = 0.0f;
         return;
     }
 
-    error_d = Id_ref - current_d;
-    error_q = Iq_ref - current_q;
-
-    integral_d = Clamp(integral_d + CURRENT_PI_KI * error_d * PI_DT, CURRENT_PI_LIMIT_V);
-    integral_q = Clamp(integral_q + CURRENT_PI_KI * error_q * PI_DT, CURRENT_PI_LIMIT_V);
-
-    Ud = Clamp(CURRENT_PI_KP * error_d + integral_d, CURRENT_PI_LIMIT_V);
-    Uq = Clamp(CURRENT_PI_KP * error_q + integral_q, CURRENT_PI_LIMIT_V);
+    Ud = PI_Run(&pi_id, Id_ref - current_d, PI_DT);
+    Uq = PI_Run(&pi_iq, Iq_ref - current_q, PI_DT);
 }
 
 /* 速度环和位置环（每 1 ms 一次）：
@@ -338,7 +355,6 @@ static void Speed_Loop_Update(void)
     static uint8_t started = 0;
     static uint32_t history[SPEED_WINDOW]; // 最近 5 次的编码器计数
     uint32_t count = __HAL_TIM_GET_COUNTER(&htim2);
-    float error;
     uint8_t i;
 
     if (drive_mode != MODE_RUN)
@@ -346,7 +362,7 @@ static void Speed_Loop_Update(void)
         started = 0;
         divider = 0;
         speed_rpm = 0.0f;
-        speed_integral = 0.0f;
+        PI_Reset(&pi_speed);
         position_ref = count;
         return;
     }
@@ -372,9 +388,7 @@ static void Speed_Loop_Update(void)
     }
     if (ctrl_mode != CTRL_CURRENT)
     {
-        error = speed_ref_rpm - speed_rpm;
-        speed_integral = Clamp(speed_integral + SPEED_PI_KI * error * SPEED_DT, IQ_REF_MAX_A);
-        Iq_ref = Clamp(SPEED_PI_KP * error + speed_integral, IQ_REF_MAX_A);
+        Iq_ref = PI_Run(&pi_speed, speed_ref_rpm - speed_rpm, SPEED_DT);
     }
 }
 
