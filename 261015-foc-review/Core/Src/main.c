@@ -36,9 +36,10 @@
  *   4. ADC_ToCurrent、Offset_Calibrate   ADC 读数 → 电流，上电零偏校准
  *   5. Clarke_Update、Park_Update        三相电流 → alpha、beta → d、q
  *   6. Current_PI_Update、InversePark_Update   电流环：PI 算 Ud、Uq，逆 Park 变回 alpha、beta
- *   7. HAL_ADCEx_InjectedConvCpltCallback  每个 PWM 周期采一次电流 → Clarke → Park → PI
- *   8. HAL_TIM_PWM_PulseFinishedCallback   每个 PWM 周期：逆 Park → SVPWM → 写 CCR
- *   9. Encoder_Align         对零（找编码器零点和转子磁极的偏差）
+ *   7. Speed_Loop_Update     速度环和位置环：位置误差 → 转速给定 → PI → Iq 给定（每 1 ms 一次）
+ *   8. HAL_ADCEx_InjectedConvCpltCallback  每个 PWM 周期采一次电流 → Clarke → Park → 速度环 → 电流环 PI
+ *   9. HAL_TIM_PWM_PulseFinishedCallback   每个 PWM 周期：逆 Park → SVPWM → 写 CCR
+ *  10. Encoder_Align         对零（找编码器零点和转子磁极的偏差）
  *
  * 【支线】可以不细读，面试很少问：
  *   - Print_Currents        串口打印，调试用
@@ -87,6 +88,17 @@
 #define ALIGN_KICK_MS          600U       // 先向两侧各推 90 度的时间
 #define ALIGN_SETTLE_MS        800U       // 回到 0 度后等转子停稳的时间
 #define ALIGN_MAX_SPREAD       120        // 两次停点相差超过这个计数就认为对零失败
+
+/* 速度环和位置环：比电流环慢得多，每 1 ms 算一次（20 个 PWM 周期）。 */
+#define SPEED_DIV              20U        // 每 20 个 PWM 周期算一次
+#define SPEED_DT               0.001f     // 速度环周期，s
+#define SPEED_WINDOW           5U         // 测速窗口：最近 5 次（5 ms）的计数差
+#define SPEED_RPM_PER_COUNT    (60.0f / (SPEED_WINDOW * SPEED_DT * ENC_COUNTS_PER_REV)) // 窗口里多 1 个计数 = 3 rpm
+#define SPEED_PI_KP            0.015f     // 比例系数，A/rpm
+#define SPEED_PI_KI            0.3f       // 积分系数，A/(rpm·s)
+#define IQ_REF_MAX_A           1.0f       // 速度环输出的 Iq 上限，A
+#define POSITION_KP            0.3f       // 位置环比例系数，rpm/计数
+#define POSITION_SPEED_MAX_RPM 60.0f      // 位置环输出的转速上限，rpm
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -99,7 +111,7 @@
 /* USER CODE BEGIN PV */
 /* 设定：你改这几个值就能改变转动（Keil 里加进 Watch 窗口直接改）。 */
 float Id_ref    = 0.0f;        // d 轴电流给定，A（0 = 不沿磁极方向用力）
-float Iq_ref    = 0.6f;        // q 轴电流给定，A（决定力矩，正数正转）
+float Iq_ref    = 0.6f;        // q 轴电流给定，A（决定力矩，正数正转；速度环打开时由速度环自动写）
 float Udc       = 12.0f;       // 母线电压，V（要和实际供电一致，现在用 12 V）
 
 /* 运行状态：按键切换。 */
@@ -107,6 +119,16 @@ float Udc       = 12.0f;       // 母线电压，V（要和实际供电一致，
 #define MODE_ALIGN             1U // 对零：电压矢量固定在 align_theta
 #define MODE_RUN               2U // 运转：电流环控制 Id、Iq
 volatile uint8_t drive_mode = MODE_OFF;
+
+/* 运转时用哪一层环：你在 Watch 窗口里改 ctrl_mode 就能切换。 */
+#define CTRL_CURRENT           0U // 只有电流环：Iq 给定就是 Iq_ref
+#define CTRL_SPEED             1U // 速度环 + 电流环：给定转速 speed_ref_rpm
+#define CTRL_POSITION          2U // 位置环 + 速度环 + 电流环：给定位置 position_ref
+volatile uint8_t ctrl_mode = CTRL_SPEED;
+float speed_ref_rpm = 60.0f;       // 速度给定，rpm（正数正转）
+volatile uint32_t position_ref = 0;// 位置给定，编码器计数（4000 = 机械转一圈）；不运转时自动跟着当前位置
+volatile float speed_rpm = 0.0f;   // 测出来的转速，rpm
+static float speed_integral = 0.0f;// 速度环的积分项，A
 volatile uint8_t key_sw = 0;   // 调试时在 Watch 窗口里写 1，等于按一下 KEY1
 
 volatile float align_theta = 0.0f;  // 对零时电压矢量的固定方向，rad
@@ -304,6 +326,58 @@ static void Current_PI_Update(void)
     Uq = Clamp(CURRENT_PI_KP * error_q + integral_q, CURRENT_PI_LIMIT_V);
 }
 
+/* 速度环和位置环（每 1 ms 一次）：
+ *   位置环：位置给定 − 当前位置，乘 Kp，得到转速给定（有上限）。
+ *   速度环：转速给定 − 测出的转速，做 PI，得到 Iq 给定，交给电流环。
+ * 测速：每 1 ms 记一次编码器计数，当前计数减去 5 ms 前的计数，就是 5 ms 里走的计数，换算成 rpm。
+ * 不在运转状态时清零，位置给定跟着当前位置，启动时不会突然冲向旧目标。 */
+static void Speed_Loop_Update(void)
+{
+    static uint8_t divider = 0;
+    static uint8_t index = 0;
+    static uint8_t started = 0;
+    static uint32_t history[SPEED_WINDOW]; // 最近 5 次的编码器计数
+    uint32_t count = __HAL_TIM_GET_COUNTER(&htim2);
+    float error;
+    uint8_t i;
+
+    if (drive_mode != MODE_RUN)
+    {
+        started = 0;
+        divider = 0;
+        speed_rpm = 0.0f;
+        speed_integral = 0.0f;
+        position_ref = count;
+        return;
+    }
+
+    divider++;
+    if (divider < SPEED_DIV) return;
+    divider = 0;
+
+    if (started == 0)
+    {
+        for (i = 0; i < SPEED_WINDOW; i++) history[i] = count; // 刚开始：转速按 0 算
+        index = 0;
+        started = 1;
+    }
+    speed_rpm = (float)(int32_t)(count - history[index]) * SPEED_RPM_PER_COUNT;
+    history[index] = count;
+    index++;
+    if (index >= SPEED_WINDOW) index = 0;
+
+    if (ctrl_mode == CTRL_POSITION)
+    {
+        speed_ref_rpm = Clamp(POSITION_KP * (float)(int32_t)(position_ref - count), POSITION_SPEED_MAX_RPM);
+    }
+    if (ctrl_mode != CTRL_CURRENT)
+    {
+        error = speed_ref_rpm - speed_rpm;
+        speed_integral = Clamp(speed_integral + SPEED_PI_KI * error * SPEED_DT, IQ_REF_MAX_A);
+        Iq_ref = Clamp(SPEED_PI_KP * error + speed_integral, IQ_REF_MAX_A);
+    }
+}
+
 /* 逆 Park：d、q 轴电压（跟着转子转）变回静止的 alpha、beta 电压。
  * 和 Park_Update 互为逆运算，angle 必须用同一个转子电角度。 */
 static void InversePark_Update(float ud, float uq, float angle)
@@ -338,7 +412,7 @@ static void Offset_Calibrate(uint16_t u, uint16_t v)
 static void Print_Currents(void)
 {
     static uint32_t last_ms = 0;
-    char line[160];
+    char line[200];
     float id, iq, ud, uq;
     uint32_t n;
     int len;
@@ -365,12 +439,13 @@ static void Print_Currents(void)
         uq /= (float)n;
     }
     len = snprintf(line, sizeof(line),
-        "mode=%u zero_ok=%u cnt=%lu ang_deg=%ld Id_mA=%ld Iq_mA=%ld Ud_mV=%ld Uq_mV=%ld\r\n",
+        "mode=%u zero_ok=%u cnt=%lu ang_deg=%ld Id_mA=%ld Iq_mA=%ld Ud_mV=%ld Uq_mV=%ld rpm=%ld ref_rpm=%ld\r\n",
         (unsigned)drive_mode, (unsigned)enc_zero_valid,
         (unsigned long)__HAL_TIM_GET_COUNTER(&htim2),
         (long)(Encoder_ElectricalAngle() * 360.0f / TWO_PI),
         (long)(id * 1000.0f), (long)(iq * 1000.0f),
-        (long)(ud * 1000.0f), (long)(uq * 1000.0f));
+        (long)(ud * 1000.0f), (long)(uq * 1000.0f),
+        (long)speed_rpm, (long)speed_ref_rpm);
     HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)len, 5);
 }
 /* USER CODE END 0 */
@@ -607,6 +682,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     Clarke_Update(current_u, current_v);
     Park_Update(current_alpha, current_beta, Encoder_ElectricalAngle());
 
+    Speed_Loop_Update();  // 每 1 ms 才真正算一次，更新 Iq_ref
     Current_PI_Update();
 
     sum_d += current_d;
