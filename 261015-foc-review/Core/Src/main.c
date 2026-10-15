@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +41,16 @@
 #define SIN_60                 0.8660254f // sqrt(3) / 2
 #define COS_60                 0.5f
 #define PWM_HZ                 20000.0f   // PWM 周期中断频率，每个周期算一次
+
+/* 电流采样：ADC 读到的是电压，要换算成电流。 */
+#define ADC_VREF_V             3.3f       // ADC 参考电压，V
+#define ADC_COUNTS             4096.0f    // 12 位 ADC，满量程 4096
+#define SHUNT_OHM              0.02f      // 采样电阻，欧姆
+#define AMP_GAIN               (5100.0f / (1200.0f + 68.0f)) // 运放放大倍数
+#define CURRENT_SIGN           (-1.0f)    // 实测方向与预期相反，所以取反
+#define CAL_SKIP_SAMPLES       2000U      // 上电后先丢掉前 2000 个（0.1 s），等电路稳定
+#define CAL_AVG_SAMPLES        256U       // 再平均 256 个，得到零电流时的读数
+#define PRINT_PERIOD_MS        200U       // 串口打印间隔
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,6 +76,19 @@ volatile float Tx, Ty, T0;     // 两个相邻有效矢量和零矢量占一个 
 volatile float dutyA, dutyB, dutyC; // 三相上桥臂占空比，0~1
 
 volatile uint8_t motor_request = 0; // 按键切换：0 停止，1 运行
+
+/* 电流采样结果。 */
+volatile uint16_t raw_u = 0, raw_v = 0;   // ADC 原始读数（0~4095）
+float offset_u = 0.0f, offset_v = 0.0f;   // 零电流时的读数
+volatile uint8_t offset_ready = 0;        // 零偏校准完成标志
+volatile float current_u = 0.0f;          // U 相电流，A
+volatile float current_v = 0.0f;          // V 相电流，A
+volatile float current_w = 0.0f;          // W 相电流，A（没有测，由 U、V 算出）
+
+/* 打印用的累加：每个打印周期取平均。 */
+static float sum_u = 0.0f, sum_v = 0.0f;
+static uint32_t sum_n = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -124,6 +148,64 @@ static void SVPWM_Update(float ualpha, float ubeta)
     __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_3,
             (uint32_t)(dutyC * __HAL_TIM_GET_AUTORELOAD(&htim8)));
 }
+/* ADC 读数减零偏，再换算成电流：读数 → 电压 → 除以放大倍数 → 除以采样电阻。 */
+static float ADC_ToCurrent(uint16_t raw, float offset)
+{
+    float volts = ((float)raw - offset) * ADC_VREF_V / ADC_COUNTS;
+    return CURRENT_SIGN * volts / AMP_GAIN / SHUNT_OHM;
+}
+
+/* 上电后在驱动关闭、电流为零时，平均若干次读数，得到零电流对应的读数。 */
+static void Offset_Calibrate(uint16_t u, uint16_t v)
+{
+    static uint32_t n = 0;
+    static float acc_u = 0.0f, acc_v = 0.0f;
+
+    n++;
+    if (n <= CAL_SKIP_SAMPLES) return; // 前面的先丢掉
+
+    acc_u += (float)u;
+    acc_v += (float)v;
+    if (n == CAL_SKIP_SAMPLES + CAL_AVG_SAMPLES)
+    {
+        offset_u = acc_u / CAL_AVG_SAMPLES;
+        offset_v = acc_v / CAL_AVG_SAMPLES;
+        offset_ready = 1;
+    }
+}
+
+/* 每秒 5 次从串口打印窗口内的平均电流。 */
+static void Print_Currents(void)
+{
+    static uint32_t last_ms = 0;
+    char line[96];
+    float iu, iv;
+    uint32_t n;
+    int len;
+
+    if ((uint32_t)(HAL_GetTick() - last_ms) < PRINT_PERIOD_MS) return;
+    last_ms = HAL_GetTick();
+
+    /* 暂停中断，取出累加值并清零。 */
+    __disable_irq();
+    n = sum_n;
+    iu = sum_u;
+    iv = sum_v;
+    sum_n = 0;
+    sum_u = sum_v = 0.0f;
+    __enable_irq();
+
+    if (n != 0U)
+    {
+        iu /= (float)n;
+        iv /= (float)n;
+    }
+    len = snprintf(line, sizeof(line),
+        "cal=%u raw_u=%u raw_v=%u Iu_mA=%ld Iv_mA=%ld\r\n",
+        (unsigned)offset_ready, (unsigned)raw_u, (unsigned)raw_v,
+        (long)(iu * 1000.0f), (long)(iv * 1000.0f));
+    HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)len, 5);
+}
 /* USER CODE END 0 */
 
 /**
@@ -156,9 +238,16 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM8_Init();
+  MX_USART1_UART_Init();
+  MX_ADC1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-  /* 上电先关驱动（MOTOR_EN 低电平）。 */
+  /* 上电先关驱动（MOTOR_EN 低电平）。校准零偏时电机必须没有电流。 */
   HAL_GPIO_WritePin(MOTOR_EN_GPIO_Port, MOTOR_EN_Pin, GPIO_PIN_RESET);
+
+  /* ADC 开始等待触发：每次 TIM8 通道 4 到点，U 相和 V 相同时采一次。 */
+  HAL_ADCEx_InjectedStart_IT(&hadc1);
+  HAL_ADCEx_InjectedStart_IT(&hadc2);
 
   /* 启动三相 PWM（上桥臂和下桥臂），此时驱动还是关的。 */
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
@@ -168,7 +257,8 @@ int main(void)
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_3);
   HAL_TIMEx_PWMN_Start(&htim8, TIM_CHANNEL_3);
 
-  /* 第 4 通道只用来产生每个周期一次的中断，FOC 计算都在中断里做。 */
+  /* 第 4 通道有两个用处：触发 ADC 采样，和每个周期产生一次中断。 */
+  __HAL_TIM_CLEAR_FLAG(&htim8, TIM_FLAG_CC4);
   HAL_TIM_PWM_Start_IT(&htim8, TIM_CHANNEL_4);
   /* USER CODE END 2 */
 
@@ -182,7 +272,13 @@ int main(void)
     /* KEY1：松开后再按下，切换启停。 */
     static uint8_t key_armed = 0;
 
-    if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
+    if (offset_ready == 0)
+    {
+        /* 零偏没校准完，不允许启动。 */
+        motor_request = 0;
+        key_armed = 0;
+    }
+    else if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin) == GPIO_PIN_SET)
     {
         key_armed = 1;
     }
@@ -192,6 +288,7 @@ int main(void)
         motor_request = !motor_request;
     }
 
+    Print_Currents();
     HAL_Delay(20); // 按键轮询间隔
   }
   /* USER CODE END 3 */
@@ -274,6 +371,39 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     Ualpha = voltage * cosf(theta);
     Ubeta  = voltage * sinf(theta);
     SVPWM_Update(Ualpha, Ubeta);
+}
+
+/* U、V 两路 ADC 各转换完成一次就进来一次，两路都到了才处理。 */
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    static uint8_t got_u = 0, got_v = 0;
+
+    if (hadc->Instance == ADC1)
+    {
+        raw_u = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+        got_u = 1;
+    }
+    if (hadc->Instance == ADC2)
+    {
+        raw_v = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+        got_v = 1;
+    }
+    if ((got_u == 0) || (got_v == 0)) return;
+    got_u = got_v = 0;
+
+    if (offset_ready == 0)
+    {
+        Offset_Calibrate(raw_u, raw_v);
+        return;
+    }
+
+    current_u = ADC_ToCurrent(raw_u, offset_u);
+    current_v = ADC_ToCurrent(raw_v, offset_v);
+    current_w = -current_u - current_v; // 三相电流之和为零
+
+    sum_u += current_u;
+    sum_v += current_v;
+    sum_n++;
 }
 
 /* USER CODE END 4 */
